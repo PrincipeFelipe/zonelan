@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     AppBar, 
     Toolbar, 
@@ -14,18 +14,21 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    TextField
+    TextField,
+    Badge
 } from '@mui/material';
 import { 
     AccountCircle, 
     Logout, 
     Person, 
-    Lock 
+    Lock,
+    Notifications
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import authService from '../../services/authService';
+import incidentService from '../../services/incidentService';
 
 const Navbar = () => {
     const navigate = useNavigate();
@@ -39,6 +42,7 @@ const Navbar = () => {
         new: '',
         confirm: ''
     });
+    const [incidentsCount, setIncidentsCount] = useState(0);
 
     const navItems = [
         { label: 'Usuarios', path: '/dashboard/users', minRole: 'Gestor' },
@@ -105,6 +109,43 @@ const Navbar = () => {
         return roles[user?.type] >= roles[minRole];
     };
 
+    // Función para obtener conteo de incidencias
+    const fetchIncidentsCount = async () => {
+        try {
+            const counts = await incidentService.getPendingIncidentsCount();
+            setIncidentsCount(counts.total);
+        } catch (error) {
+            console.error('Error al obtener conteo de incidencias:', error);
+        }
+    };
+
+    // Efecto para cargar conteo de incidencias al montar el componente
+    useEffect(() => {
+        if (user) {
+            // Cargar inicialmente
+            fetchIncidentsCount();
+            
+            // Configurar intervalo para actualizar cada cierto tiempo
+            const intervalId = setInterval(() => {
+                fetchIncidentsCount();
+            }, 60000); // Actualizar cada minuto
+            
+            // Escuchar eventos de actualización desde otros componentes
+            const handleIncidentCountUpdate = (event) => {
+                const newCounts = event.detail;
+                setIncidentsCount(newCounts.total);
+            };
+            
+            window.addEventListener('incidentCountUpdated', handleIncidentCountUpdate);
+            
+            // Limpiar intervalo y listener al desmontar
+            return () => {
+                clearInterval(intervalId);
+                window.removeEventListener('incidentCountUpdated', handleIncidentCountUpdate);
+            };
+        }
+    }, [user]);
+
     return (
         <AppBar position="static">
             <Toolbar>
@@ -127,7 +168,19 @@ const Navbar = () => {
                         </Button>
                     ))}
                 </Box>
-                <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {/* Icono de notificaciones con contador */}
+                    <IconButton 
+                        color="inherit" 
+                        onClick={() => navigate('/dashboard/incidents')}
+                        sx={{ mr: 2 }}
+                    >
+                        <Badge badgeContent={incidentsCount} color="error">
+                            <Notifications />
+                        </Badge>
+                    </IconButton>
+                    
+                    {/* Menú de usuario */}
                     <IconButton
                         size="large"
                         onClick={handleMenu}

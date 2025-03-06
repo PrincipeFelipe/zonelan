@@ -1,6 +1,9 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 from .models import Incident
 from .serializers import IncidentSerializer
 
@@ -9,22 +12,21 @@ class IncidentViewSet(viewsets.ModelViewSet):
     serializer_class = IncidentSerializer
     permission_classes = [IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(reported_by=self.request.user)
-
-    def get_queryset(self):
-        queryset = Incident.objects.all()
+@api_view(['GET'])
+def incident_counts(request):
+    """
+    Retorna el número de incidencias pendientes y en progreso
+    """
+    try:
+        pending_count = Incident.objects.filter(status='PENDING').count()
+        in_progress_count = Incident.objects.filter(status='IN_PROGRESS').count()
         
-        # Filtrar por cliente si se proporciona
-        customer = self.request.query_params.get('customer', None)
-        if customer is not None:
-            queryset = queryset.filter(customer=customer)
-        
-        # Filtrar por estado si se proporciona
-        status = self.request.query_params.get('status', None)
-        if status is not None:
-            queryset = queryset.filter(status=status)
-
-        return queryset.order_by('-created_at')
+        return Response({
+            'pending': pending_count,
+            'in_progress': in_progress_count,
+            'total': pending_count + in_progress_count
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Create your views here.

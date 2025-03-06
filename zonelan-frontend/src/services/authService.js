@@ -1,4 +1,6 @@
 import axios from '../utils/axiosConfig';
+import Swal from 'sweetalert2';
+import incidentService from './incidentService';
 
 const authService = {
     login: async (credentials) => {
@@ -20,6 +22,33 @@ const authService = {
 
                 // Guardamos la información del usuario
                 localStorage.setItem('user', JSON.stringify(userResponse.data));
+                
+                // Obtener el conteo de incidencias y mostrar notificación
+                try {
+                    const counts = await incidentService.getPendingIncidentsCount();
+                    if (counts.total > 0) {
+                        // Usar setTimeout para dar tiempo al DOM a estabilizarse
+                        setTimeout(async () => {
+                            await Swal.fire({
+                                icon: 'info',
+                                title: 'Incidencias activas',
+                                html: `
+                                    <div>
+                                        <p>Tienes <b>${counts.total}</b> incidencias pendientes de resolver:</p>
+                                        <ul>
+                                            <li><b>${counts.pending}</b> incidencias en estado pendiente</li>
+                                            <li><b>${counts.in_progress}</b> incidencias en progreso</li>
+                                        </ul>
+                                    </div>
+                                `,
+                                confirmButtonText: 'Entendido'
+                            });
+                        }, 300); // Retraso de 300ms
+                    }
+                } catch (countError) {
+                    console.error('Error al obtener conteo de incidencias:', countError);
+                }
+                
                 return userResponse.data;
             }
             return response.data;

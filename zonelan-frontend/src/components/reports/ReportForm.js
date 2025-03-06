@@ -114,10 +114,23 @@ const ReportForm = () => {
 
     const fetchIncidents = async () => {
         try {
-            const response = await axios.get('/incidents/');
-            setIncidents(response.data);
+            // Obtener todas las incidencias
+            const response = await axios.get('/incidents/incidents/');
+            
+            if (Array.isArray(response.data)) {
+                // Filtrar solo las incidencias que están en estado PENDING o IN_PROGRESS
+                const activeIncidents = response.data.filter(incident => 
+                    incident.status === 'PENDING' || incident.status === 'IN_PROGRESS'
+                );
+                
+                setIncidents(activeIncidents);
+            } else {
+                console.error('La respuesta de incidencias no es un array:', response.data);
+                setIncidents([]);
+            }
         } catch (error) {
-            console.error('Error fetching incidents:', error);
+            console.error('Error al cargar incidencias:', error);
+            setIncidents([]);
         }
     };
 
@@ -553,7 +566,16 @@ const ReportForm = () => {
                         >
                             {incidents.map((incident) => (
                                 <MenuItem key={incident.id} value={incident.id}>
-                                    {incident.title}
+                                    {incident.title} ({incident.customer_name})
+                                    {' '}
+                                    <span style={{
+                                        display: 'inline-block',
+                                        width: '10px',
+                                        height: '10px',
+                                        borderRadius: '50%',
+                                        marginLeft: '5px',
+                                        backgroundColor: incident.status === 'PENDING' ? '#ff9800' : '#4caf50'
+                                    }}/>
                                 </MenuItem>
                             ))}
                         </TextField>

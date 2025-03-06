@@ -20,13 +20,15 @@ import {
     List,
     ListItem,
     ListItemText,
-    ListItemSecondaryAction
+    ListItemSecondaryAction,
+    CircularProgress
 } from '@mui/material';
 import { Edit, Delete, Add, Visibility, Print } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
 import authService from '../../services/authService';
+import incidentService from '../../services/incidentService'; // Añadir esta importación
 import ReportDialog from '../reports/ReportDialog';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 
@@ -46,7 +48,7 @@ const IncidentList = () => {
         status: 'PENDING',
         resolution_notes: ''
     });
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const STATUS_CHOICES = [
         { value: 'PENDING', label: 'Pendiente' },
@@ -70,7 +72,7 @@ const IncidentList = () => {
     const fetchIncidents = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('/incidents/');
+            const response = await axios.get('/incidents/incidents/');
             setIncidents(response.data);
         } catch (error) {
             Swal.fire({
@@ -165,17 +167,25 @@ const IncidentList = () => {
 
             console.log('Datos a enviar:', incidentData);
 
+            let result;
+            
+            // Guardar el estado anterior si estamos editando
+            const oldStatus = editMode ? selectedIncident.status : null;
+
             if (editMode) {
-                await axios.put(`/incidents/${selectedIncident.id}/`, incidentData);
+                result = await axios.put(`/incidents/incidents/${selectedIncident.id}/`, incidentData);
                 toast.success('Incidencia actualizada correctamente');
             } else {
-                await axios.post('/incidents/', incidentData);
+                result = await axios.post('/incidents/incidents/', incidentData);
                 toast.success('Incidencia creada correctamente');
             }
             
             handleCloseDialog();
             fetchIncidents();
-
+            
+            // Actualizar el contador de incidencias pendientes
+            await updateIncidentCounter(oldStatus, incidentData.status);
+            
         } catch (error) {
             console.error('Error detallado:', error.response?.data);
             const errorMessage = error.response?.data?.detail || 
@@ -443,6 +453,35 @@ const IncidentList = () => {
         }
     };
 
+    const handleDeleteIncident = async (incident) => {
+        try {
+            const result = await Swal.fire({
+                title: '¿Estás seguro?',
+                text: "Esta acción no se puede deshacer",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                await axios.delete(`/incidents/incidents/${incident.id}/`);
+                toast.success('Incidencia eliminada correctamente');
+                fetchIncidents();
+                
+                // Si la incidencia estaba pendiente o en progreso, actualizar contador
+                if (incident.status === 'PENDING' || incident.status === 'IN_PROGRESS') {
+                    await incidentService.forceUpdate();
+                }
+            }
+        } catch (error) {
+            console.error('Error al eliminar la incidencia:', error);
+            toast.error('Error al eliminar la incidencia');
+        }
+    };
+
     const columns = [
         {
             field: 'title',
@@ -453,27 +492,43 @@ const IncidentList = () => {
             field: 'customer_name',
             headerName: 'Cliente',
             flex: 1,
+            // Añadir renderCell para manejar posibles valores nulos
+            renderCell: (params) => params.value || '-',
         },
         {
             field: 'status',
             headerName: 'Estado',
             flex: 1,
-            valueFormatter: (params) => 
-                STATUS_CHOICES.find(s => s.value === params.value)?.label || params.value,
+            renderCell: (params) => {
+                const status = STATUS_CHOICES.find(s => s.value === params.value);
+                return status ? status.label : params.value || '-';
+            },
         },
         {
             field: 'priority',
             headerName: 'Prioridad',
             flex: 1,
-            valueFormatter: (params) => 
-                PRIORITY_CHOICES.find(p => p.value === params.value)?.label || params.value,
+            renderCell: (params) => {
+                const priority = PRIORITY_CHOICES.find(p => p.value === params.value);
+                return priority ? priority.label : params.value || '-';
+            },
         },
         {
             field: 'created_at',
             headerName: 'Fecha',
             flex: 1,
-            valueFormatter: (params) => 
-                new Date(params.value).toLocaleDateString(),
+            renderCell: (params) => {
+                if (!params.value) return '-';
+
+                try {
+                    const date = new Date(params.value);
+                    if (isNaN(date)) return 'Fecha inválida';
+
+                    return date.toLocaleDateString();
+                } catch (error) {
+                    return 'Fecha inválida';
+                }
+            },
         },
         {
             field: 'actions',
@@ -503,6 +558,13 @@ const IncidentList = () => {
                         title="Imprimir"
                     >
                         <Print />
+                    </IconButton>
+                    <IconButton 
+                        onClick={() => handleDeleteIncident(params.row)} 
+                        size="small"
+                        title="Eliminar"
+                    >
+                        <Delete />
                     </IconButton>
                 </Box>
             ),
@@ -554,6 +616,34 @@ const IncidentList = () => {
         toolbarExportPrint: 'Imprimir',
     };
 
+    // Añadir esta función dentro del componente IncidentList
+    const updateIncidentCounter = async (oldStatus, newStatus) => {
+        try {
+            // Si es una nueva incidencia o si el estado cambia entre pendiente/en progreso y otros estados
+            const wasPending = oldStatus === 'PENDING' || oldStatus === 'IN_PROGRESS';
+            const isPending = newStatus === 'PENDING' || newStatus === 'IN_PROGRESS';
+            
+            // Si hay un cambio que afecte al contador, actualizarlo
+            if (!oldStatus || wasPending !== isPending) {
+                // Actualizar el contador en el Navbar utilizando el servicio
+                const newCounts = await incidentService.getPendingIncidentsCount();
+                
+                // Emitir un evento personalizado que el Navbar pueda escuchar
+                const event = new CustomEvent('incidentCountUpdated', { 
+                    detail: newCounts 
+                });
+                window.dispatchEvent(event);
+                
+                // Opcional: mostrar un toast informativo si todas las incidencias están resueltas
+                if (newCounts.total === 0 && (oldStatus === 'PENDING' || oldStatus === 'IN_PROGRESS')) {
+                    toast.success('¡Felicidades! Todas las incidencias han sido resueltas.');
+                }
+            }
+        } catch (error) {
+            console.error('Error al actualizar el contador de incidencias:', error);
+        }
+    };
+
     return (
         <>
             <Toaster position="top-right" />
@@ -572,34 +662,42 @@ const IncidentList = () => {
                 </Box>
 
                 <Paper sx={{ flexGrow: 1, width: '100%' }}>
-                    <DataGrid
-                        rows={incidents}
-                        columns={columns}
-                        initialState={{
-                            pagination: {
-                                paginationModel: { pageSize: 10, page: 0 },
-                            },
-                        }}
-                        pageSizeOptions={[10, 25, 50]}
-                        disableRowSelectionOnClick
-                        loading={loading}
-                        autoHeight
-                        slots={{ toolbar: GridToolbar }}
-                        slotProps={{
-                            toolbar: {
-                                showQuickFilter: true,
-                                quickFilterProps: { debounceMs: 500 },
-                            },
-                        }}
-                        getRowId={(row) => row.id}
-                        localeText={localeText}
-                        sx={{
-                            '& .MuiDataGrid-toolbarContainer': {
-                                borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                                padding: '8px 16px',
-                            },
-                        }}
-                    />
+                    <Box sx={{ height: 400, width: '100%' }}>
+                        {loading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : (
+                            <DataGrid
+                                rows={incidents}
+                                columns={columns}
+                                initialState={{
+                                    pagination: {
+                                        paginationModel: { pageSize: 10, page: 0 },
+                                    },
+                                }}
+                                pageSizeOptions={[10, 25, 50]}
+                                disableRowSelectionOnClick
+                                loading={loading}
+                                autoHeight
+                                slots={{ toolbar: GridToolbar }}
+                                slotProps={{
+                                    toolbar: {
+                                        showQuickFilter: true,
+                                        quickFilterProps: { debounceMs: 500 },
+                                    },
+                                }}
+                                getRowId={(row) => row.id}
+                                localeText={localeText}
+                                sx={{
+                                    '& .MuiDataGrid-toolbarContainer': {
+                                        borderBottom: '1px solid rgba(224, 224, 224, 1)',
+                                        padding: '8px 16px',
+                                    },
+                                }}
+                            />
+                        )}
+                    </Box>
                 </Paper>
             </Box>
 

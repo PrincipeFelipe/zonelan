@@ -134,15 +134,24 @@ const ReportList = () => {
             flex: 1 
         },
         { 
+            field: 'description', 
+            headerName: 'Descripción', 
+            flex: 1 
+        },
+        { 
             field: 'date', 
             headerName: 'Fecha', 
             flex: 1,
-            type: 'date',
-            valueGetter: (params) => {
+            renderCell: (params) => {
+                if (!params.value) return '-';
+                
                 try {
-                    return params.row?.date ? new Date(params.row.date) : null;
-                } catch {
-                    return null;
+                    const date = new Date(params.value);
+                    if (isNaN(date)) return 'Fecha inválida';
+                    
+                    return date.toLocaleDateString('es-ES');
+                } catch (error) {
+                    return 'Fecha inválida';
                 }
             }
         },
@@ -150,19 +159,19 @@ const ReportList = () => {
             field: 'status', 
             headerName: 'Estado', 
             width: 120,
-            valueGetter: (params) => 
-                params.row?.status === 'DRAFT' ? 'Borrador' : 'Completado'
+            renderCell: (params) => {
+                const status = params.row?.status;
+                if (status === 'DRAFT') return 'Borrador';
+                if (status === 'COMPLETED') return 'Completado';
+                if (status === 'DELETED') return 'Eliminado';
+                return status || '';
+            }
         },
         { 
             field: 'hours_worked', 
             headerName: 'Horas', 
             width: 100,
             type: 'number'
-        },
-        { 
-            field: 'description', 
-            headerName: 'Descripción', 
-            flex: 1 
         },
         {
             field: 'actions',
