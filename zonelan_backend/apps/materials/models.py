@@ -24,7 +24,7 @@ class MaterialControl(models.Model):
         ('VENTA', 'Venta'),
         ('RETIRADA', 'Retirada'),
         ('USO', 'Uso en reporte'),
-        ('DEVOLUCION', 'Devolución por eliminación de reporte')
+        ('DEVOLUCION', 'Devolución')
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Usuario')
@@ -50,6 +50,12 @@ class MaterialControl(models.Model):
         related_name='material_controls',
         verbose_name='Reporte asociado'
     )
+    invoice_image = models.ImageField(
+        upload_to='material_invoices/',
+        null=True,
+        blank=True,
+        verbose_name='Imagen de albarán'
+    )
     date = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
 
     class Meta:
@@ -60,4 +66,5 @@ class MaterialControl(models.Model):
         operation_text = 'Entrada' if self.operation == 'ADD' else 'Salida'
         reason_text = dict(self.REASON_CHOICES).get(self.reason, self.reason)
         report_text = f" - Reporte #{self.report.id}" if self.report else ""
-        return f"{self.material.name} - {operation_text} ({reason_text}){report_text} - {self.date.strftime('%d/%m/%Y %H:%M')}"
+        has_invoice = " [Con albarán]" if self.invoice_image else ""
+        return f"{self.material.name} - {operation_text} ({reason_text}){report_text}{has_invoice} - {self.date.strftime('%d/%m/%Y %H:%M')}"

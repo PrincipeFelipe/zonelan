@@ -10,6 +10,7 @@ const axiosInstance = axios.create({
 });
 
 export const getMediaUrl = (imageUrl) => {
+    // Si no hay URL, retornar cadena vacía
     if (!imageUrl) return '';
     
     // Si la URL ya empieza con http o https, devolverla tal cual
@@ -17,23 +18,17 @@ export const getMediaUrl = (imageUrl) => {
         return imageUrl;
     }
     
-    // Construir la URL completa, asegurando que usamos 'mediafiles'
+    // Asegurarse que BASE_URL está definido
+    const baseUrl = BASE_URL || '';
+    
+    // Construir la URL completa
     if (imageUrl.startsWith('/')) {
-        // Si comienza con /, eliminar la barra inicial
-        imageUrl = imageUrl.substring(1);
+        // Si comienza con /, mantener la URL tal como está
+        return `${baseUrl}${imageUrl}`;
+    } else {
+        // Si no comienza con /, añadir /
+        return `${baseUrl}/${imageUrl}`;
     }
-    
-    // Si la URL contiene /media/, reemplazarlo por /mediafiles/
-    if (imageUrl.includes('/media/')) {
-        imageUrl = imageUrl.replace('/media/', '/mediafiles/');
-    }
-    
-    // Si no incluye mediafiles, añadirlo
-    if (!imageUrl.includes('/mediafiles/')) {
-        return `${BASE_URL}/mediafiles/${imageUrl}`;
-    }
-    
-    return `${BASE_URL}/${imageUrl}`;
 };
 
 axiosInstance.interceptors.request.use(

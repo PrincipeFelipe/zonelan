@@ -3,36 +3,50 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
     DialogActions,
     Button,
-    Chip
+    Paper,
+    TableContainer,
+    Table,
+    TableHead,
+    TableBody,
+    TableRow,
+    TableCell,
+    Chip,
+    Box,
+    IconButton,
+    Typography,
 } from '@mui/material';
-import axios from '../../utils/axiosConfig';
+import { ReceiptOutlined, Close } from '@mui/icons-material';
+import axios, { getMediaUrl } from '../../utils/axiosConfig';
 
 const MaterialHistory = ({ open, onClose, material }) => {
     const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [openInvoice, setOpenInvoice] = useState(false);
+    const [currentInvoice, setCurrentInvoice] = useState(null);
 
     useEffect(() => {
-        if (material) {
+        if (material && material.id && open) {
             fetchHistory();
         }
-    }, [material]);
+    }, [material, open]);
 
     const fetchHistory = async () => {
+        setLoading(true);
         try {
-            const response = await axios.get('/materials/control/');
-            const filteredHistory = response.data.filter(h => h.material === material.id);
-            setHistory(filteredHistory);
+            const response = await axios.get(`/materials/material-history/${material.id}/`);
+            setHistory(response.data);
         } catch (error) {
             console.error('Error fetching history:', error);
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const handleViewInvoice = (invoiceUrl) => {
+        setCurrentInvoice(invoiceUrl);
+        setOpenInvoice(true);
     };
 
     const getOperationColor = (operation) => {
@@ -68,52 +82,115 @@ const MaterialHistory = ({ open, onClose, material }) => {
     if (!material) return null;
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>Historial de {material.name}</DialogTitle>
-            <DialogContent>
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Usuario</TableCell>
-                                <TableCell>Operación</TableCell>
-                                <TableCell>Motivo</TableCell>
-                                <TableCell>Cantidad</TableCell>
-                                <TableCell>Fecha</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {history.map((record) => (
-                                <TableRow key={record.id}>
-                                    <TableCell>{record.user_name}</TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={record.operation === 'ADD' ? 'Entrada' : 'Salida'}
-                                            color={getOperationColor(record.operation)}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={getReasonLabel(record.reason, record.report, record.report_deleted)}
-                                            color={getReasonColor(record.reason)}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell>{record.quantity}</TableCell>
-                                    <TableCell>
-                                        {new Date(record.date).toLocaleString()}
-                                    </TableCell>
+        <>
+            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+                <DialogTitle>Historial de {material.name}</DialogTitle>
+                <DialogContent>
+                    <TableContainer component={Paper}>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Usuario</TableCell>
+                                    <TableCell>Operación</TableCell>
+                                    <TableCell>Motivo</TableCell>
+                                    <TableCell>Cantidad</TableCell>
+                                    <TableCell>Fecha</TableCell>
+                                    <TableCell>Albarán</TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Cerrar</Button>
-            </DialogActions>
-        </Dialog>
+                            </TableHead>
+                            <TableBody>
+                                {history.map((record) => (
+                                    <TableRow key={record.id}>
+                                        <TableCell>{record.user_name}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={record.operation === 'ADD' ? 'Entrada' : 'Salida'}
+                                                color={getOperationColor(record.operation)}
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={getReasonLabel(record.reason, record.report, record.report_deleted)}
+                                                color={getReasonColor(record.reason)}
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell>{record.quantity}</TableCell>
+                                        <TableCell>
+                                            {new Date(record.date).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            {record.invoice_url ? (
+                                                <IconButton 
+                                                    color="primary" 
+                                                    size="small"
+                                                    onClick={() => handleViewInvoice(record.invoice_url)}
+                                                >
+                                                    <ReceiptOutlined />
+                                                </IconButton>
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={onClose}>Cerrar</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Diálogo para mostrar la imagen del albarán */}
+            <Dialog open={openInvoice} onClose={() => setOpenInvoice(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography>Albarán de Compra</Typography>
+                        <IconButton onClick={() => setOpenInvoice(false)}>
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <Box 
+                        sx={{ 
+                            display: 'flex', 
+                            justifyContent: 'center', 
+                            alignItems: 'center', 
+                            minHeight: '400px' 
+                        }}
+                    >
+                        <img 
+                            src={currentInvoice ? getMediaUrl(currentInvoice) : ''} 
+                            alt="Albarán de compra" 
+                            style={{ 
+                                maxWidth: '100%',
+                                maxHeight: '70vh',
+                                objectFit: 'contain'
+                            }}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenInvoice(false)}>Cerrar</Button>
+                    <Button 
+                        color="primary" 
+                        onClick={() => {
+                            if (currentInvoice) {
+                                const url = getMediaUrl(currentInvoice);
+                                window.open(url, '_blank');
+                            }
+                        }}
+                        disabled={!currentInvoice}
+                    >
+                        Ver en nueva pestaña
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
     );
 };
 

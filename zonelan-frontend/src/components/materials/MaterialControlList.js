@@ -3,12 +3,13 @@ import {
     Box, Typography, Paper, TableContainer, Table, TableHead,
     TableBody, TableRow, TableCell, TablePagination, Chip, Link,
     TextField, MenuItem, FormControl, InputLabel, Select, Button,
-    Grid, IconButton, Tooltip
+    Grid, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, 
+    DialogActions
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { FilterList, Clear } from '@mui/icons-material';
+import { FilterList, Clear, ReceiptOutlined, Close } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
-import axios from '../../utils/axiosConfig';
+import axios, { getMediaUrl } from '../../utils/axiosConfig';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
@@ -17,6 +18,10 @@ const MaterialControlList = () => {
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [loading, setLoading] = useState(true);
     const [showFilters, setShowFilters] = useState(false);
+    
+    // Estados para gestionar la visualización de albaranes
+    const [openInvoice, setOpenInvoice] = useState(false);
+    const [currentInvoice, setCurrentInvoice] = useState(null);
     
     // Estados para filtros
     const [filters, setFilters] = useState({
@@ -112,6 +117,12 @@ const MaterialControlList = () => {
         });
     };
 
+    // Función para manejar la visualización del albarán
+    const handleViewInvoice = (invoiceUrl) => {
+        setCurrentInvoice(invoiceUrl);
+        setOpenInvoice(true);
+    };
+
     const getOperationColor = (operation) => {
         return operation === 'ADD' ? 'success' : 'error';
     };
@@ -144,6 +155,7 @@ const MaterialControlList = () => {
         return date.toLocaleString('es-ES');
     };
 
+    // Función para formatear la referencia al reporte, teniendo en cuenta si está eliminado
     const formatDeletedReportReference = (control) => {
         if (!control.report) {
             return '-';
@@ -292,18 +304,19 @@ const MaterialControlList = () => {
                                 <TableCell>Motivo</TableCell>
                                 <TableCell>Usuario</TableCell>
                                 <TableCell>Reporte</TableCell>
+                                <TableCell>Albarán</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} align="center">
+                                    <TableCell colSpan={8} align="center">
                                         Cargando...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredControls.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} align="center">
+                                    <TableCell colSpan={8} align="center">
                                         No hay registros disponibles
                                     </TableCell>
                                 </TableRow>
@@ -335,6 +348,19 @@ const MaterialControlList = () => {
                                             <TableCell>
                                                 {formatDeletedReportReference(control)}
                                             </TableCell>
+                                            <TableCell>
+                                                {control.invoice_url ? (
+                                                    <IconButton 
+                                                        color="primary" 
+                                                        size="small"
+                                                        onClick={() => handleViewInvoice(control.invoice_url)}
+                                                    >
+                                                        <ReceiptOutlined />
+                                                    </IconButton>
+                                                ) : (
+                                                    '-'
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     ))
                             )}
@@ -353,8 +379,56 @@ const MaterialControlList = () => {
                         setPage(0);
                     }}
                     labelRowsPerPage="Filas por página:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
                 />
             </Paper>
+
+            {/* Diálogo para mostrar la imagen del albarán */}
+            <Dialog open={openInvoice} onClose={() => setOpenInvoice(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography>Albarán de Compra</Typography>
+                        <IconButton onClick={() => setOpenInvoice(false)}>
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <Box 
+                        sx={{ 
+                            display: 'flex', 
+                            justifyContent: 'center', 
+                            alignItems: 'center', 
+                            minHeight: '400px' 
+                        }}
+                    >
+                        <img 
+                            src={currentInvoice ? getMediaUrl(currentInvoice) : ''} 
+                            alt="Albarán de compra" 
+                            style={{ 
+                                maxWidth: '100%',
+                                maxHeight: '70vh',
+                                objectFit: 'contain'
+                            }}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenInvoice(false)}>Cerrar</Button>
+                    <Button 
+                        color="primary" 
+                        onClick={() => {
+                            if (currentInvoice) {
+                                const url = getMediaUrl(currentInvoice);
+                                window.open(url, '_blank');
+                            }
+                        }}
+                        disabled={!currentInvoice}
+                    >
+                        Ver en nueva pestaña
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Paper,
     Typography,
@@ -10,10 +10,12 @@ import {
     TextField,
     Box,
     IconButton,
-    MenuItem
+    MenuItem,
+    FormHelperText,
+    InputAdornment
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { Edit, Delete, Add, History } from '@mui/icons-material';
+import { Edit, Delete, Add, History, CloudUpload, Clear, PhotoCamera } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
@@ -46,6 +48,11 @@ const MaterialList = () => {
     const [withdrawalType, setWithdrawalType] = useState('RETIRADA');
 
     const currentUser = authService.getCurrentUser();
+
+    // Añadir estado para la imagen del albarán
+    const [invoiceImage, setInvoiceImage] = useState(null);
+    const [invoicePreview, setInvoicePreview] = useState('');
+    const fileInputRef = useRef();
 
     useEffect(() => {
         fetchMaterials();
@@ -151,6 +158,7 @@ const MaterialList = () => {
         setOpenDialog(false);
         setEditMode(false);
         setSelectedMaterial(null);
+        clearImage();
     };
 
     // Modificar handleInputChange para manejar los nuevos campos
@@ -169,6 +177,22 @@ const MaterialList = () => {
         }
     };
 
+    const handleImageChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setInvoiceImage(file);
+            setInvoicePreview(URL.createObjectURL(file));
+        }
+    };
+
+    const clearImage = () => {
+        setInvoiceImage(null);
+        setInvoicePreview('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     // Modificar handleSubmit para manejar la cantidad correctamente
     const handleSubmit = async () => {
         try {
@@ -181,8 +205,9 @@ const MaterialList = () => {
                 return;
             }
 
-            let materialData;
-            
+            // Preparar el FormData para enviar datos incluyendo la imagen
+            const formData = new FormData();
+
             if (editMode) {
                 // Calculamos la nueva cantidad basada en la operación
                 const changeAmount = parseInt(quantityChange.amount);
@@ -201,6 +226,11 @@ const MaterialList = () => {
                 if (quantityChange.operation === 'add') {
                     // Si es add, el motivo puede ser COMPRA o DEVOLUCION según lo seleccionado
                     operationReason = reasonType;
+                    
+                    // Solo permitir imagen para compras
+                    if (reasonType === 'COMPRA' && invoiceImage) {
+                        formData.append('invoice_image', invoiceImage);
+                    }
                 } else {
                     // Si es subtract, el motivo será VENTA o RETIRADA según lo seleccionado
                     operationReason = withdrawalType;
@@ -216,25 +246,35 @@ const MaterialList = () => {
                     }
                 }
 
-                materialData = {
-                    name: newMaterial.name,
-                    price: parseFloat(newMaterial.price),
-                    operation: quantityChange.operation === 'add' ? 'ADD' : 'REMOVE',
-                    quantity_change: changeAmount,
-                    reason: operationReason
-                };
+                // Añadir campos al FormData
+                formData.append('name', newMaterial.name);
+                formData.append('price', parseFloat(newMaterial.price));
+                formData.append('operation', quantityChange.operation === 'add' ? 'ADD' : 'REMOVE');
+                formData.append('quantity_change', changeAmount);
+                formData.append('reason', operationReason);
                 
-                await axios.put(`/materials/materials/${selectedMaterial.id}/`, materialData);
+                await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
                 toast.success('Material actualizado correctamente');
             } else {
                 // En modo creación, enviamos todos los datos incluyendo la cantidad inicial
-                materialData = {
-                    name: newMaterial.name,
-                    price: parseFloat(newMaterial.price),
-                    quantity: parseInt(newMaterial.quantity || 0)
-                };
+                formData.append('name', newMaterial.name);
+                formData.append('price', parseFloat(newMaterial.price));
+                formData.append('quantity', parseInt(newMaterial.quantity || 0));
                 
-                await axios.post('/materials/materials/', materialData);
+                // Añadir imagen del albarán si existe
+                if (invoiceImage) {
+                    formData.append('invoice_image', invoiceImage);
+                }
+                
+                await axios.post('/materials/materials/', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
                 toast.success('Material creado correctamente');
             }
             
@@ -441,6 +481,60 @@ const MaterialList = () => {
                                 </TextField>
                             )}
 
+                            {/* Añadir subida de imagen de albarán para COMPRA */}
+                            {quantityChange.operation === 'add' && reasonType === 'COMPRA' && (
+                                <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        Albarán de compra (opcional)
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Button
+                                                variant="outlined"
+                                                component="label"
+                                                startIcon={<CloudUpload />}
+                                            >
+                                                Subir Albarán
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    hidden
+                                                    accept="image/*"
+                                                    onChange={handleImageChange}
+                                                />
+                                            </Button>
+                                            {invoiceImage && (
+                                                <IconButton color="error" onClick={clearImage}>
+                                                    <Clear />
+                                                </IconButton>
+                                            )}
+                                        </Box>
+                                        
+                                        {invoicePreview && (
+                                            <Box 
+                                                sx={{ 
+                                                    mt: 1, 
+                                                    width: '100%', 
+                                                    maxHeight: '200px',
+                                                    overflow: 'hidden',
+                                                    textAlign: 'center'
+                                                }}
+                                            >
+                                                <img 
+                                                    src={invoicePreview} 
+                                                    alt="Vista previa del albarán" 
+                                                    style={{ 
+                                                        maxWidth: '100%',
+                                                        maxHeight: '200px',
+                                                        objectFit: 'contain'
+                                                    }}
+                                                />
+                                            </Box>
+                                        )}
+                                    </Box>
+                                </Box>
+                            )}
+
                             {/* Selector de motivo para operación de restar */}
                             {quantityChange.operation === 'subtract' && (
                                 <TextField
@@ -457,16 +551,70 @@ const MaterialList = () => {
                             )}
                         </>
                     ) : (
-                        <TextField
-                            fullWidth
-                            margin="normal"
-                            name="quantity"
-                            label="Cantidad inicial"
-                            type="number"
-                            value={newMaterial.quantity}
-                            onChange={handleInputChange}
-                            inputProps={{ min: 0 }}
-                        />
+                        <>
+                            <TextField
+                                fullWidth
+                                margin="normal"
+                                name="quantity"
+                                label="Cantidad inicial"
+                                type="number"
+                                value={newMaterial.quantity}
+                                onChange={handleInputChange}
+                                inputProps={{ min: 0 }}
+                            />
+                            
+                            {/* Añadir subida de imagen de albarán para nuevo material */}
+                            <Box sx={{ mt: 2 }}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                    Albarán de compra (opcional)
+                                </Typography>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Button
+                                            variant="outlined"
+                                            component="label"
+                                            startIcon={<CloudUpload />}
+                                        >
+                                            Subir Albarán
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                hidden
+                                                accept="image/*"
+                                                onChange={handleImageChange}
+                                            />
+                                        </Button>
+                                        {invoiceImage && (
+                                            <IconButton color="error" onClick={clearImage}>
+                                                <Clear />
+                                            </IconButton>
+                                        )}
+                                    </Box>
+                                    
+                                    {invoicePreview && (
+                                        <Box 
+                                            sx={{ 
+                                                mt: 1, 
+                                                width: '100%', 
+                                                maxHeight: '200px',
+                                                overflow: 'hidden',
+                                                textAlign: 'center'
+                                            }}
+                                        >
+                                            <img 
+                                                src={invoicePreview} 
+                                                alt="Vista previa del albarán" 
+                                                style={{ 
+                                                    maxWidth: '100%',
+                                                    maxHeight: '200px',
+                                                    objectFit: 'contain'
+                                                }}
+                                            />
+                                        </Box>
+                                    )}
+                                </Box>
+                            </Box>
+                        </>
                     )}
                     
                     <TextField
@@ -478,6 +626,9 @@ const MaterialList = () => {
                         value={newMaterial.price}
                         onChange={handleInputChange}
                         inputProps={{ min: 0, step: "0.01" }}
+                        InputProps={{
+                            endAdornment: <InputAdornment position="end">€</InputAdornment>,
+                        }}
                     />
                 </DialogContent>
                 <DialogActions>
