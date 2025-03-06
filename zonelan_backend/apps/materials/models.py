@@ -18,6 +18,14 @@ class MaterialControl(models.Model):
         ('ADD', 'Añadir'),
         ('REMOVE', 'Quitar'),
     ]
+    
+    REASON_CHOICES = [
+        ('COMPRA', 'Compra'),
+        ('VENTA', 'Venta'),
+        ('RETIRADA', 'Retirada'),
+        ('USO', 'Uso en reporte'),
+        ('DEVOLUCION', 'Devolución')
+    ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Usuario')
     material = models.ForeignKey(Material, on_delete=models.CASCADE, verbose_name='Material')
@@ -27,6 +35,20 @@ class MaterialControl(models.Model):
         choices=OPERATION_CHOICES, 
         default='ADD',
         verbose_name='Operación'
+    )
+    reason = models.CharField(
+        max_length=10,
+        choices=REASON_CHOICES,
+        default='COMPRA',
+        verbose_name='Motivo'
+    )
+    report = models.ForeignKey(
+        'reports.WorkReport',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='material_controls',
+        verbose_name='Reporte asociado'
     )
     date = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
 

@@ -9,7 +9,8 @@ import {
     DialogActions,
     TextField,
     Box,
-    IconButton
+    IconButton,
+    MenuItem
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { Edit, Delete, Add, History } from '@mui/icons-material';
@@ -37,6 +38,12 @@ const MaterialList = () => {
         amount: 0,
         operation: 'add' // 'add' o 'subtract'
     });
+
+    // Añadir estado para el motivo
+    const [reasonType, setReasonType] = useState('COMPRA');
+
+    // Añadir el estado para el tipo de retirada
+    const [withdrawalType, setWithdrawalType] = useState('RETIRADA');
 
     const currentUser = authService.getCurrentUser();
 
@@ -174,18 +181,32 @@ const MaterialList = () => {
                 return;
             }
 
+            let materialData;
+            
             if (editMode) {
                 // Calculamos la nueva cantidad basada en la operación
                 const changeAmount = parseInt(quantityChange.amount);
+                if (!changeAmount || changeAmount <= 0) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'La cantidad debe ser un número positivo'
+                    });
+                    return;
+                }
+                
                 const currentQuantity = parseInt(newMaterial.quantity);
-                let newQuantity;
+                let operationReason;
 
                 if (quantityChange.operation === 'add') {
-                    newQuantity = currentQuantity + changeAmount;
+                    // Si es add, el motivo puede ser COMPRA o DEVOLUCION según lo seleccionado
+                    operationReason = reasonType;
                 } else {
-                    newQuantity = currentQuantity - changeAmount;
+                    // Si es subtract, el motivo será VENTA o RETIRADA según lo seleccionado
+                    operationReason = withdrawalType;
+                    
                     // Validar que no quede negativo
-                    if (newQuantity < 0) {
+                    if (currentQuantity - changeAmount < 0) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
@@ -195,25 +216,22 @@ const MaterialList = () => {
                     }
                 }
 
-                const materialData = {
+                materialData = {
                     name: newMaterial.name,
                     price: parseFloat(newMaterial.price),
-                    quantity: newQuantity,
-                    // Enviamos estos campos solo para el historial
                     operation: quantityChange.operation === 'add' ? 'ADD' : 'REMOVE',
-                    quantity_change: changeAmount
+                    quantity_change: changeAmount,
+                    reason: operationReason
                 };
-                
-                console.log('Datos a enviar:', materialData);
                 
                 await axios.put(`/materials/materials/${selectedMaterial.id}/`, materialData);
                 toast.success('Material actualizado correctamente');
             } else {
                 // En modo creación, enviamos todos los datos incluyendo la cantidad inicial
-                const materialData = {
+                materialData = {
                     name: newMaterial.name,
                     price: parseFloat(newMaterial.price),
-                    quantity: parseInt(newMaterial.quantity)
+                    quantity: parseInt(newMaterial.quantity || 0)
                 };
                 
                 await axios.post('/materials/materials/', materialData);
@@ -407,6 +425,36 @@ const MaterialList = () => {
                                     </Button>
                                 </Box>
                             </Box>
+
+                            {/* Selector de motivo para operación de añadir */}
+                            {quantityChange.operation === 'add' && (
+                                <TextField
+                                    fullWidth
+                                    margin="normal"
+                                    select
+                                    label="Motivo de entrada"
+                                    value={reasonType}
+                                    onChange={(e) => setReasonType(e.target.value)}
+                                >
+                                    <MenuItem value="COMPRA">Compra</MenuItem>
+                                    <MenuItem value="DEVOLUCION">Devolución</MenuItem>
+                                </TextField>
+                            )}
+
+                            {/* Selector de motivo para operación de restar */}
+                            {quantityChange.operation === 'subtract' && (
+                                <TextField
+                                    fullWidth
+                                    margin="normal"
+                                    select
+                                    label="Motivo de salida"
+                                    value={withdrawalType}
+                                    onChange={(e) => setWithdrawalType(e.target.value)}
+                                >
+                                    <MenuItem value="VENTA">Venta</MenuItem>
+                                    <MenuItem value="RETIRADA">Retirada</MenuItem>
+                                </TextField>
+                            )}
                         </>
                     ) : (
                         <TextField

@@ -386,6 +386,11 @@ const ReportForm = () => {
                 formData.append(`new_after_images_${index}`, img.file);
             });
 
+            // Añadir el ID del usuario actual y motivo de uso de materiales
+            const currentUser = JSON.parse(localStorage.getItem('user'));
+            formData.append('user', currentUser.id);
+            formData.append('material_reason', 'USO');  // Indicar que es uso en reporte
+
             console.log('Datos a enviar:', {
                 ...Object.fromEntries(formData.entries()),
                 existingImages,

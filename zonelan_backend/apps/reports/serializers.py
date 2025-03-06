@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import WorkReport, MaterialUsed, TechnicianAssignment, ReportImage
+from apps.materials.models import Material, MaterialControl  # Corregido: importar desde apps.materials.models
+from django.db import transaction
 import json
 
 class ReportImageSerializer(serializers.ModelSerializer):
@@ -51,6 +53,7 @@ class WorkReportSerializer(serializers.ModelSerializer):
     def get_after_images(self, obj):
         return ReportImageSerializer(obj.after_images, many=True).data
 
+    @transaction.atomic
     def create(self, validated_data):
         report = super().create(validated_data)
         request = self.context['request']
@@ -66,11 +69,32 @@ class WorkReportSerializer(serializers.ModelSerializer):
         # Procesar materiales
         materials_data = json.loads(request.data.get('materials_used', '[]'))
         for material_data in materials_data:
-            MaterialUsed.objects.create(
-                report=report,
-                material_id=material_data['material'],
-                quantity=material_data['quantity']
-            )
+            material_id = material_data.get('material')
+            quantity = material_data.get('quantity')
+            
+            if material_id and quantity:
+                material = Material.objects.get(id=material_id)
+                
+                # Crear MaterialUsed
+                MaterialUsed.objects.create(
+                    report=report,
+                    material_id=material_id,
+                    quantity=quantity
+                )
+                
+                # Actualizar stock
+                material.quantity -= quantity
+                material.save()
+                
+                # Registrar en el control de materiales
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=quantity,
+                    operation='REMOVE',
+                    reason='USO',
+                    report=report
+                )
 
         # Procesar nuevas imágenes
         for key in request.FILES:

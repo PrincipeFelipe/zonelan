@@ -7,10 +7,10 @@ class MaterialSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'quantity', 'price']
 
 class MaterialControlSerializer(serializers.ModelSerializer):
-    user_name = serializers.ReadOnlyField(source='user.username')
     material_name = serializers.ReadOnlyField(source='material.name')
+    user_name = serializers.ReadOnlyField(source='user.username')
 
     class Meta:
         model = MaterialControl
-        fields = ['id', 'user', 'user_name', 'material', 'material_name', 'quantity', 'operation', 'date']
-        read_only_fields = ['date']
+        fields = ['id', 'material', 'material_name', 'user', 'user_name', 
+                 'quantity', 'operation', 'reason', 'report', 'date']

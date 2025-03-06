@@ -11,7 +11,8 @@ import {
     TableRow,
     Paper,
     DialogActions,
-    Button
+    Button,
+    Chip
 } from '@mui/material';
 import axios from '../../utils/axiosConfig';
 
@@ -34,6 +35,32 @@ const MaterialHistory = ({ open, onClose, material }) => {
         }
     };
 
+    const getOperationColor = (operation) => {
+        return operation === 'ADD' ? 'success' : 'error';
+    };
+
+    const getReasonColor = (reason) => {
+        switch (reason) {
+            case 'COMPRA': return 'info';
+            case 'VENTA': return 'warning';
+            case 'RETIRADA': return 'secondary';
+            case 'USO': return 'error';
+            case 'DEVOLUCION': return 'success';
+            default: return 'default';
+        }
+    };
+
+    const getReasonLabel = (reason) => {
+        switch (reason) {
+            case 'COMPRA': return 'Compra';
+            case 'VENTA': return 'Venta';
+            case 'RETIRADA': return 'Retirada';
+            case 'USO': return 'Uso en reporte';
+            case 'DEVOLUCION': return 'Devolución';
+            default: return reason;
+        }
+    };
+
     if (!material) return null;
 
     return (
@@ -46,6 +73,7 @@ const MaterialHistory = ({ open, onClose, material }) => {
                             <TableRow>
                                 <TableCell>Usuario</TableCell>
                                 <TableCell>Operación</TableCell>
+                                <TableCell>Motivo</TableCell>
                                 <TableCell>Cantidad</TableCell>
                                 <TableCell>Fecha</TableCell>
                             </TableRow>
@@ -55,7 +83,18 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                 <TableRow key={record.id}>
                                     <TableCell>{record.user_name}</TableCell>
                                     <TableCell>
-                                        {record.operation === 'ADD' ? 'Añadir' : 'Quitar'}
+                                        <Chip
+                                            label={record.operation === 'ADD' ? 'Entrada' : 'Salida'}
+                                            color={getOperationColor(record.operation)}
+                                            size="small"
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={getReasonLabel(record.reason)}
+                                            color={getReasonColor(record.reason)}
+                                            size="small"
+                                        />
                                     </TableCell>
                                     <TableCell>{record.quantity}</TableCell>
                                     <TableCell>
