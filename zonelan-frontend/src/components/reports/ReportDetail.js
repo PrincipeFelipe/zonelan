@@ -137,6 +137,32 @@ const ReportDetail = () => {
         printWindow.close();
     };
 
+    // Si tienes la funcionalidad de eliminar imágenes desde la vista detalle
+    const handleDeleteImage = async (type, imageId) => {
+        try {
+            // Eliminar la imagen del servidor
+            await axios.delete(`/reports/delete-image/${imageId}/`);
+            
+            // Actualizar el estado local
+            if (type === 'BEFORE') {
+                setReport(prev => ({
+                    ...prev,
+                    before_images: prev.before_images.filter(img => img.id !== imageId)
+                }));
+            } else {
+                setReport(prev => ({
+                    ...prev,
+                    after_images: prev.after_images.filter(img => img.id !== imageId)
+                }));
+            }
+            
+            toast.success('Imagen eliminada correctamente');
+        } catch (error) {
+            console.error('Error al eliminar la imagen:', error);
+            toast.error('Error al eliminar la imagen');
+        }
+    };
+
     if (!report) return (
         <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography>Cargando parte de trabajo...</Typography>

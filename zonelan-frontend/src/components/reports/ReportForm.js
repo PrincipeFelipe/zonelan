@@ -20,7 +20,7 @@ import {
     DialogContent,
     IconButton as MuiIconButton
 } from '@mui/material';
-import { Add, Delete, Save, ArrowBack, CloudUpload, Close, NavigateNext, NavigateBefore } from '@mui/icons-material';
+import { Add, Delete, Save, ArrowBack, CloudUpload, Close, NavigateNext, NavigateBefore, DeleteOutline, Restore as RestoreIcon } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
@@ -56,6 +56,7 @@ const ReportForm = () => {
     const [openImageDialog, setOpenImageDialog] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [imagesToDelete, setImagesToDelete] = useState([]);
 
     useEffect(() => {
         fetchIncidents();
@@ -248,11 +249,21 @@ const ReportForm = () => {
     };
 
     const handleRemoveImage = (type, imageId) => {
+        // Marcar la imagen para eliminación al guardar
+        setImagesToDelete([...imagesToDelete, imageId]);
+        
+        // Ocultar la imagen de la interfaz, pero sin eliminarla del servidor aún
         if (type === 'BEFORE') {
             setBeforeImages(prevImages => prevImages.filter(img => img.id !== imageId));
         } else {
             setAfterImages(prevImages => prevImages.filter(img => img.id !== imageId));
         }
+        
+        // Mostrar notificación de que la imagen será eliminada al guardar
+        toast.success('La imagen será eliminada cuando guardes el reporte', {
+            duration: 3000,
+            icon: '🗑️'
+        });
     };
 
     const handleImageSelect = (type) => (event) => {
@@ -362,7 +373,7 @@ const ReportForm = () => {
             formData.append('technicians', JSON.stringify(report.technicians));
             formData.append('materials_used', JSON.stringify(report.materials_used));
 
-            // Añadir imágenes existentes
+            // Añadir imágenes existentes (solo las que no están marcadas para eliminar)
             const existingImages = [
                 ...beforeImages.map(img => ({
                     id: img.id,
@@ -376,6 +387,9 @@ const ReportForm = () => {
                 }))
             ];
             formData.append('existing_images', JSON.stringify(existingImages));
+            
+            // Añadir lista de imágenes a eliminar
+            formData.append('images_to_delete', JSON.stringify(imagesToDelete));
 
             // Añadir nuevas imágenes
             selectedBeforeImages.forEach((img, index) => {
@@ -419,6 +433,15 @@ const ReportForm = () => {
             console.error('Error completo:', error);
             const errorMessage = error.response?.data?.error || 'Error al guardar el parte';
             toast.error(errorMessage);
+        }
+    };
+
+    const handleRestoreImages = () => {
+        // Recargar el reporte para restaurar las imágenes
+        if (id) {
+            fetchReport(); // Cambiar fetchReportDetails por fetchReport
+            setImagesToDelete([]);
+            toast.success('Imágenes restauradas');
         }
     };
 

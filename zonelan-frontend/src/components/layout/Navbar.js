@@ -45,7 +45,8 @@ const Navbar = () => {
         { label: 'Clientes', path: '/dashboard/customers', minRole: 'User' },
         { label: 'Materiales', path: '/dashboard/materials', minRole: 'User' },
         { label: 'Incidencias', path: '/dashboard/incidents', minRole: 'User' },
-        { label: 'Partes', path: '/dashboard/reports', minRole: 'User' }
+        { label: 'Partes', path: '/dashboard/reports', minRole: 'User' },
+        { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' }
     ];
 
     const handleMenu = (event) => {

@@ -69,6 +69,3 @@ class MaterialControlViewSet(viewsets.ModelViewSet):
     queryset = MaterialControl.objects.all().order_by('-date')
     serializer_class = MaterialControlSerializer
     permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)

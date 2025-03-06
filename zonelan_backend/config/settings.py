@@ -99,7 +99,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Configuración de archivos multimedia
-MEDIA_URL = '/media/'
+MEDIA_URL = '/mediafiles/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
 
 # Configuración de REST Framework

@@ -17,13 +17,23 @@ export const getMediaUrl = (imageUrl) => {
         return imageUrl;
     }
     
-    // Si la URL ya incluye /media/, eliminar la duplicación
-    if (imageUrl.includes('/media/')) {
-        imageUrl = imageUrl.replace('/media/', '');
+    // Construir la URL completa, asegurando que usamos 'mediafiles'
+    if (imageUrl.startsWith('/')) {
+        // Si comienza con /, eliminar la barra inicial
+        imageUrl = imageUrl.substring(1);
     }
     
-    // Construir la URL completa
-    return `${process.env.REACT_APP_API_URL}/media/${imageUrl}`;
+    // Si la URL contiene /media/, reemplazarlo por /mediafiles/
+    if (imageUrl.includes('/media/')) {
+        imageUrl = imageUrl.replace('/media/', '/mediafiles/');
+    }
+    
+    // Si no incluye mediafiles, añadirlo
+    if (!imageUrl.includes('/mediafiles/')) {
+        return `${BASE_URL}/mediafiles/${imageUrl}`;
+    }
+    
+    return `${BASE_URL}/${imageUrl}`;
 };
 
 axiosInstance.interceptors.request.use(

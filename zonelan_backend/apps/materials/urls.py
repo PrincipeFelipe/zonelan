@@ -1,9 +1,11 @@
-from django.urls import path
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import MaterialViewSet, MaterialControlViewSet
+from . import views
 
 router = DefaultRouter()
-router.register(r'materials', MaterialViewSet)
-router.register(r'control', MaterialControlViewSet)
+router.register(r'materials', views.MaterialViewSet)
+router.register(r'control', views.MaterialControlViewSet)
 
-urlpatterns = router.urls
+urlpatterns = [
+    path('', include(router.urls)),
+]

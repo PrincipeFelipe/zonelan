@@ -8,7 +8,8 @@ import os
 class WorkReport(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'Borrador'),
-        ('COMPLETED', 'Completado')
+        ('COMPLETED', 'Completado'),
+        ('DELETED', 'Eliminado')  # Añadimos este nuevo estado
     ]
 
     date = models.DateField(verbose_name='Fecha')
@@ -32,6 +33,7 @@ class WorkReport(models.Model):
         default='DRAFT',
         verbose_name='Estado'
     )
+    is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')  # Campo para borrado lógico
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,14 +96,39 @@ class ReportImage(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.pk:  # Si es una nueva imagen
-            self.image.name = self.get_upload_path(os.path.basename(self.image.name))
+            # Asegurarnos de que no haya '/media/' en el nombre
+            basename = os.path.basename(self.image.name)
+            self.image.name = self.get_upload_path(basename)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # Eliminar el archivo físico
-        if self.image and os.path.isfile(self.image.path):
-            os.remove(self.image.path)
-        super().delete(*args, **kwargs)
+        """Sobrescribe el método delete para eliminar también el archivo físico"""
+        # Guardar la ruta del archivo antes de eliminarlo de la base de datos
+        if self.image:
+            # Almacenar el path del archivo
+            try:
+                image_path = self.image.path
+            except:
+                image_path = None
+        else:
+            image_path = None
+            
+        # Llamar al método delete original
+        result = super().delete(*args, **kwargs)
+        
+        # Eliminar el archivo físico si existe
+        if image_path and os.path.isfile(image_path):
+            try:
+                os.remove(image_path)
+                # Intenta eliminar el directorio si está vacío
+                directory = os.path.dirname(image_path)
+                if os.path.exists(directory) and not os.listdir(directory):
+                    os.rmdir(directory)
+            except OSError as e:
+                # Log the error but don't raise it to avoid breaking the operation
+                print(f"Error al eliminar el archivo físico: {e}")
+                
+        return result
 
 class TechnicianAssignment(models.Model):
     report = models.ForeignKey(

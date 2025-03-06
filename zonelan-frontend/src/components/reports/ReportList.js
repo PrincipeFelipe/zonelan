@@ -25,6 +25,7 @@ const ReportList = () => {
     const fetchReports = async () => {
         setLoading(true);
         try {
+            // El backend ya filtra los reportes eliminados
             const response = await axios.get('/reports/reports/');
             setReports(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
@@ -39,7 +40,7 @@ const ReportList = () => {
     const handleDelete = async (reportId) => {
         const result = await Swal.fire({
             title: '¿Estás seguro?',
-            text: "Esta acción no se puede deshacer",
+            text: "El reporte será marcado como eliminado",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#3085d6',
@@ -47,12 +48,12 @@ const ReportList = () => {
             confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         });
-    
+
         if (result.isConfirmed) {
             try {
                 await axios.delete(`/reports/reports/${reportId}/`);
                 toast.success('Parte de trabajo eliminado correctamente');
-                fetchReports();
+                fetchReports(); // Volver a cargar la lista (que ahora excluirá el eliminado)
             } catch (error) {
                 console.error('Error deleting report:', error);
                 toast.error(

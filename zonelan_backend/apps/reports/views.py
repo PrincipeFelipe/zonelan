@@ -19,7 +19,7 @@ class WorkReportViewSet(viewsets.ModelViewSet):
         # Procesar técnicos
         technicians_data = self.request.data.get('technicians', [])
         for tech_data in technicians_data:
-            if tech_data and 'technician' in tech_data:
+            if (tech_data and 'technician' in tech_data):
                 TechnicianAssignment.objects.create(
                     report=report,
                     technician_id=tech_data['technician']
@@ -28,7 +28,7 @@ class WorkReportViewSet(viewsets.ModelViewSet):
         # Procesar materiales
         materials_data = self.request.data.get('materials_used', [])
         for material_data in materials_data:
-            if material_data and 'material' in material_data and 'quantity' in material_data:
+            if (material_data and 'material' in material_data and 'quantity' in material_data):
                 MaterialUsed.objects.create(
                     report=report,
                     material_id=material_data['material'],
@@ -38,7 +38,7 @@ class WorkReportViewSet(viewsets.ModelViewSet):
         return report
 
     def get_queryset(self):
-        queryset = WorkReport.objects.all()
+        queryset = WorkReport.objects.filter(is_deleted=False)  # Solo mostrar los no eliminados
         
         # Filtrar por incidencia si se proporciona
         incident = self.request.query_params.get('incident', None)
@@ -51,6 +51,19 @@ class WorkReportViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status)
 
         return queryset.order_by('-date')
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Marcar como eliminado en lugar de borrarlo realmente
+        instance.is_deleted = True
+        instance.status = 'DELETED'
+        instance.save()
+        
+        # No ajustamos los materiales porque queremos mantener el registro histórico
+        # de uso de materiales incluso para reportes "eliminados"
+        
+        return Response({"detail": "Reporte marcado como eliminado."}, status=status.HTTP_200_OK)
 
 class MaterialUsedViewSet(viewsets.ModelViewSet):
     queryset = MaterialUsed.objects.all()
@@ -83,10 +96,16 @@ def upload_images(request):
             image.save()
             
             if image and image.id:
-                # Usar solo la ruta relativa de la imagen
+                # Usar la URL real para evitar problemas con rutas
+                image_url = image.image.url
+                
+                # Si la URL comienza con /media/ pero debería ser /mediafiles/
+                if image_url.startswith('/media/'):
+                    image_url = f'/mediafiles/{image_url[7:]}'
+                
                 uploaded_images.append({
                     'id': image.id,
-                    'image': image.image.url,  # Esto devolverá la ruta relativa
+                    'image': image_url,
                     'description': '',
                     'image_type': image_type
                 })
@@ -94,3 +113,20 @@ def upload_images(request):
         return Response(uploaded_images)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+@api_view(['DELETE'])
+def delete_image(request, image_id):
+    try:
+        image = ReportImage.objects.get(id=image_id)
+        
+        # Guardar el path para poder eliminar el archivo físico
+        image_path = image.image.path
+        
+        # Eliminar la imagen de la base de datos (esto ya llama al método delete() del modelo)
+        image.delete()
+        
+        return Response({"detail": "Imagen eliminada correctamente."}, status=status.HTTP_200_OK)
+    except ReportImage.DoesNotExist:
+        return Response({"detail": "Imagen no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

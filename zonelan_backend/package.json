@@ -1,1 +1,6 @@
-{}
+{
+  "dependencies": {
+    "@mui/x-date-pickers": "^7.27.1",
+    "date-fns": "^4.1.0"
+  }
+}

@@ -113,6 +113,7 @@ class WorkReportSerializer(serializers.ModelSerializer):
 
         return report
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         request = self.context['request']
         
@@ -152,20 +153,30 @@ class WorkReportSerializer(serializers.ModelSerializer):
         existing_images = json.loads(request.data.get('existing_images', '[]'))
         existing_image_ids = [img['id'] for img in existing_images if 'id' in img]
         
-        # Eliminar imágenes que ya no están en existing_images
-        ReportImage.objects.filter(
-            report=instance
-        ).exclude(
-            id__in=existing_image_ids
-        ).delete()
+        # Procesar imágenes marcadas para eliminación
+        images_to_delete_ids = json.loads(request.data.get('images_to_delete', '[]'))
+        if images_to_delete_ids:
+            # Primero verificamos que las imágenes pertenezcan a este reporte para evitar eliminaciones no autorizadas
+            images_to_delete = ReportImage.objects.filter(
+                id__in=images_to_delete_ids,
+                report=instance
+            )
+            # Eliminar cada imagen (esto llamará al método delete sobrescrito que elimina el archivo físico)
+            for image in images_to_delete:
+                image.delete()
         
         # Actualizar las imágenes existentes que permanecen
         for img_data in existing_images:
             if img_data.get('id'):
-                ReportImage.objects.filter(id=img_data['id']).update(
-                    description=img_data.get('description', ''),
-                    image_type=img_data['image_type']
-                )
+                try:
+                    # Verificar si la imagen existe antes de actualizarla
+                    image = ReportImage.objects.get(id=img_data['id'], report=instance)
+                    image.description = img_data.get('description', '')
+                    image.image_type = img_data['image_type']
+                    image.save()
+                except ReportImage.DoesNotExist:
+                    # La imagen puede no existir si se carga solo el id pero la imagen fue eliminada
+                    pass
 
         # Procesar nuevas imágenes
         for key in request.FILES:

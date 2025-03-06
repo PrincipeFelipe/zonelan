@@ -11,8 +11,8 @@ class TechnicianAssignmentInline(admin.TabularInline):
 
 @admin.register(WorkReport)
 class WorkReportAdmin(admin.ModelAdmin):
-    list_display = ('id', 'incident', 'status', 'date')
-    list_filter = ('status', 'incident', 'date')
+    list_display = ('id', 'incident', 'status', 'date', 'is_deleted')
+    list_filter = ('status', 'incident', 'date', 'is_deleted')
     search_fields = ('description', 'incident__title')
     inlines = [TechnicianAssignmentInline, MaterialUsedInline]
 
