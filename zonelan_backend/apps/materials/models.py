@@ -24,7 +24,7 @@ class MaterialControl(models.Model):
         ('VENTA', 'Venta'),
         ('RETIRADA', 'Retirada'),
         ('USO', 'Uso en reporte'),
-        ('DEVOLUCION', 'Devolución')
+        ('DEVOLUCION', 'Devolución por eliminación de reporte')
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Usuario')
@@ -37,7 +37,7 @@ class MaterialControl(models.Model):
         verbose_name='Operación'
     )
     reason = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=REASON_CHOICES,
         default='COMPRA',
         verbose_name='Motivo'
@@ -57,5 +57,7 @@ class MaterialControl(models.Model):
         verbose_name_plural = 'Control de Materiales'
 
     def __str__(self):
-        operation_text = 'añadido' if self.operation == 'ADD' else 'quitado'
-        return f"{self.material.name} - {operation_text} por {self.user.username} - {self.date}"
+        operation_text = 'Entrada' if self.operation == 'ADD' else 'Salida'
+        reason_text = dict(self.REASON_CHOICES).get(self.reason, self.reason)
+        report_text = f" - Reporte #{self.report.id}" if self.report else ""
+        return f"{self.material.name} - {operation_text} ({reason_text}){report_text} - {self.date.strftime('%d/%m/%Y %H:%M')}"

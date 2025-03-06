@@ -38,29 +38,82 @@ const ReportList = () => {
     };
 
     const handleDelete = async (reportId) => {
-        const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "El reporte será marcado como eliminado",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        });
-
-        if (result.isConfirmed) {
-            try {
-                await axios.delete(`/reports/reports/${reportId}/`);
-                toast.success('Parte de trabajo eliminado correctamente');
-                fetchReports(); // Volver a cargar la lista (que ahora excluirá el eliminado)
-            } catch (error) {
-                console.error('Error deleting report:', error);
-                toast.error(
-                    error.response?.data?.detail || 
-                    'Error al eliminar el parte de trabajo'
-                );
+        try {
+            // Primero obtener los detalles del reporte para verificar si tiene materiales
+            const reportResponse = await axios.get(`/reports/reports/${reportId}/`);
+            const report = reportResponse.data;
+            
+            // Comprobar si el reporte tiene materiales usados
+            const hasMaterials = report.materials_used && report.materials_used.length > 0;
+            
+            let returnMaterials = false;
+            
+            if (hasMaterials) {
+                // Si hay materiales, preguntar qué hacer con ellos
+                const materialNames = report.materials_used.map(m => `${m.material_name} (${m.quantity})`).join(", ");
+                
+                const result = await Swal.fire({
+                    title: '¿Qué hacemos con los materiales?',
+                    html: `Este reporte tiene los siguientes materiales utilizados:<br><br>` +
+                          `<strong>${materialNames}</strong><br><br>` +
+                          `¿Qué deseas hacer con estos materiales?`,
+                    icon: 'question',
+                    showDenyButton: true,
+                    confirmButtonText: 'Devolver al stock',
+                    denyButtonText: 'Mantener como utilizados',
+                    confirmButtonColor: '#28a745',
+                    denyButtonColor: '#dc3545',
+                    showCancelButton: true,
+                    cancelButtonText: 'Cancelar eliminación'
+                });
+                
+                if (result.isDismissed) {
+                    // El usuario canceló la operación
+                    return;
+                }
+                
+                // Si el usuario confirma, devolver los materiales al stock
+                returnMaterials = result.isConfirmed;
+            } else {
+                // Si no hay materiales, solo confirmar la eliminación
+                const confirmResult = await Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: "El reporte será marcado como eliminado",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                });
+                
+                if (!confirmResult.isConfirmed) {
+                    return;
+                }
             }
+
+            // Proceder con la eliminación, enviando el parámetro para devolver materiales si corresponde
+            await axios.delete(`/reports/reports/${reportId}/?return_materials=${returnMaterials}`);
+            
+            // Mensaje según la acción realizada
+            if (hasMaterials) {
+                if (returnMaterials) {
+                    toast.success('Parte eliminado y materiales devueltos al stock');
+                } else {
+                    toast.success('Parte eliminado manteniendo el uso de materiales');
+                }
+            } else {
+                toast.success('Parte eliminado correctamente');
+            }
+            
+            // Recargar la lista
+            fetchReports();
+        } catch (error) {
+            console.error('Error en la eliminación del reporte:', error);
+            toast.error(
+                error.response?.data?.detail || 
+                'Error al eliminar el parte de trabajo'
+            );
         }
     };
 

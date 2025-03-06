@@ -50,13 +50,17 @@ const MaterialHistory = ({ open, onClose, material }) => {
         }
     };
 
-    const getReasonLabel = (reason) => {
+    const getReasonLabel = (reason, report, reportDeleted) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
             case 'VENTA': return 'Venta';
             case 'RETIRADA': return 'Retirada';
-            case 'USO': return 'Uso en reporte';
-            case 'DEVOLUCION': return 'Devolución';
+            case 'USO': return report ? `Uso en reporte #${report}` : 'Uso';
+            case 'DEVOLUCION': 
+                if (report && reportDeleted) {
+                    return `Devolución por eliminación de reporte #${report}`;
+                }
+                return 'Devolución';
             default: return reason;
         }
     };
@@ -91,7 +95,7 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                     </TableCell>
                                     <TableCell>
                                         <Chip
-                                            label={getReasonLabel(record.reason)}
+                                            label={getReasonLabel(record.reason, record.report, record.report_deleted)}
                                             color={getReasonColor(record.reason)}
                                             size="small"
                                         />

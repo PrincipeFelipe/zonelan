@@ -133,14 +133,101 @@ class WorkReportSerializer(serializers.ModelSerializer):
                     technician_id=tech_data['technician']
                 )
 
-        # Actualizar materiales
-        current_materials = list(MaterialUsed.objects.filter(report=instance))
-        for current_material in current_materials:
-            current_material.material.quantity += current_material.quantity
-            current_material.material.save()
-        MaterialUsed.objects.filter(report=instance).delete()
-
+        # Obtener los materiales actuales antes de actualizarlos
+        current_materials = {
+            material.material_id: material.quantity 
+            for material in MaterialUsed.objects.filter(report=instance)
+        }
+        
+        # Los materiales que se van a usar en la nueva versión del reporte
+        new_materials = {}
         materials_data = json.loads(request.data.get('materials_used', '[]'))
+        for material_data in materials_data:
+            if material_data and 'material' in material_data and 'quantity' in material_data:
+                material_id = material_data['material']
+                quantity = int(material_data['quantity'])
+                new_materials[material_id] = quantity
+        
+        # Identificar materiales que se van a eliminar (están en current pero no en new)
+        for material_id, old_quantity in current_materials.items():
+            if material_id not in new_materials:
+                # Material eliminado: registrar como DEVOLUCION
+                material = Material.objects.get(id=material_id)
+                
+                # Devolver el material al inventario
+                material.quantity += old_quantity
+                material.save()
+                
+                # Registrar en el control como devolución
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=old_quantity,
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    report=instance
+                )
+            elif new_materials[material_id] < old_quantity:
+                # Cantidad disminuida: devolver la diferencia
+                material = Material.objects.get(id=material_id)
+                difference = old_quantity - new_materials[material_id]
+                
+                # Devolver la diferencia al inventario
+                material.quantity += difference
+                material.save()
+                
+                # Registrar en el control como devolución parcial
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=difference,
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    report=instance
+                )
+        
+        # Identificar materiales que se van a añadir o aumentar (están en new pero no en current o con mayor cantidad)
+        for material_id, new_quantity in new_materials.items():
+            if material_id not in current_materials:
+                # Material nuevo: registrar como USO
+                material = Material.objects.get(id=material_id)
+                
+                # Reducir el inventario
+                material.quantity -= new_quantity
+                material.save()
+                
+                # Registrar en el control como uso
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=new_quantity,
+                    operation='REMOVE',
+                    reason='USO',
+                    report=instance
+                )
+            elif new_quantity > current_materials[material_id]:
+                # Cantidad aumentada: usar la diferencia
+                material = Material.objects.get(id=material_id)
+                difference = new_quantity - current_materials[material_id]
+                
+                # Reducir la diferencia del inventario
+                material.quantity -= difference
+                material.save()
+                
+                # Registrar en el control como uso adicional
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=difference,
+                    operation='REMOVE',
+                    reason='USO',
+                    report=instance
+                )
+        
+        # Eliminar todos los materiales actuales para recrearlos
+        MaterialUsed.objects.filter(report=instance).delete()
+        
+        # Crear los nuevos registros de materiales (sin afectar inventario adicional, ya se hizo arriba)
         for material_data in materials_data:
             if material_data and 'material' in material_data and 'quantity' in material_data:
                 MaterialUsed.objects.create(
@@ -149,33 +236,26 @@ class WorkReportSerializer(serializers.ModelSerializer):
                     quantity=material_data['quantity']
                 )
 
-        # Manejar imágenes existentes
-        existing_images = json.loads(request.data.get('existing_images', '[]'))
-        existing_image_ids = [img['id'] for img in existing_images if 'id' in img]
-        
         # Procesar imágenes marcadas para eliminación
         images_to_delete_ids = json.loads(request.data.get('images_to_delete', '[]'))
         if images_to_delete_ids:
-            # Primero verificamos que las imágenes pertenezcan a este reporte para evitar eliminaciones no autorizadas
             images_to_delete = ReportImage.objects.filter(
                 id__in=images_to_delete_ids,
                 report=instance
             )
-            # Eliminar cada imagen (esto llamará al método delete sobrescrito que elimina el archivo físico)
             for image in images_to_delete:
                 image.delete()
         
-        # Actualizar las imágenes existentes que permanecen
+        # Actualizar las imágenes existentes
+        existing_images = json.loads(request.data.get('existing_images', '[]'))
         for img_data in existing_images:
             if img_data.get('id'):
                 try:
-                    # Verificar si la imagen existe antes de actualizarla
                     image = ReportImage.objects.get(id=img_data['id'], report=instance)
                     image.description = img_data.get('description', '')
                     image.image_type = img_data['image_type']
                     image.save()
                 except ReportImage.DoesNotExist:
-                    # La imagen puede no existir si se carga solo el id pero la imagen fue eliminada
                     pass
 
         # Procesar nuevas imágenes

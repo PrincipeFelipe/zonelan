@@ -144,6 +144,40 @@ const MaterialControlList = () => {
         return date.toLocaleString('es-ES');
     };
 
+    const formatDeletedReportReference = (control) => {
+        if (!control.report) {
+            return '-';
+        }
+        
+        // Si el reporte está marcado como eliminado
+        if (control.report_deleted) {
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Reporte #{control.report}
+                    </Typography>
+                    <Chip
+                        label="Eliminado"
+                        size="small"
+                        color="default"
+                        variant="outlined"
+                        sx={{ fontSize: '0.65rem' }}
+                    />
+                </Box>
+            );
+        }
+        
+        // Si el reporte existe y no está eliminado
+        return (
+            <Link 
+                component={RouterLink} 
+                to={`/dashboard/reports/${control.report}`}
+            >
+                Ver reporte #{control.report}
+            </Link>
+        );
+    };
+
     return (
         <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -299,16 +333,7 @@ const MaterialControlList = () => {
                                             </TableCell>
                                             <TableCell>{control.user_name}</TableCell>
                                             <TableCell>
-                                                {control.report ? (
-                                                    <Link 
-                                                        component={RouterLink} 
-                                                        to={`/dashboard/reports/${control.report}`}
-                                                    >
-                                                        Ver reporte #{control.report}
-                                                    </Link>
-                                                ) : (
-                                                    '-'
-                                                )}
+                                                {formatDeletedReportReference(control)}
                                             </TableCell>
                                         </TableRow>
                                     ))

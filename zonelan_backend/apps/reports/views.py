@@ -4,11 +4,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db import transaction
 from .models import WorkReport, MaterialUsed, ReportImage
 from .serializers import WorkReportSerializer, MaterialUsedSerializer
+from apps.materials.models import Material, MaterialControl
 
 class WorkReportViewSet(viewsets.ModelViewSet):
-    queryset = WorkReport.objects.all()
+    queryset = WorkReport.objects.filter(is_deleted=False)
     serializer_class = WorkReportSerializer
     permission_classes = [IsAuthenticated]
 
@@ -52,16 +54,38 @@ class WorkReportViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by('-date')
     
+    @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        
+        # Obtener el parámetro que indica si devolver los materiales
+        return_materials = request.query_params.get('return_materials', 'false').lower() == 'true'
         
         # Marcar como eliminado en lugar de borrarlo realmente
         instance.is_deleted = True
         instance.status = 'DELETED'
         instance.save()
         
-        # No ajustamos los materiales porque queremos mantener el registro histórico
-        # de uso de materiales incluso para reportes "eliminados"
+        # Si se solicita devolver los materiales
+        if return_materials:
+            # Obtener los materiales utilizados en el reporte
+            materials_used = MaterialUsed.objects.filter(report=instance)
+            
+            for material_used in materials_used:
+                # Devolver el material al inventario
+                material = material_used.material
+                material.quantity += material_used.quantity
+                material.save()
+                
+                # Registrar en el control como devolución
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=material_used.quantity,
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    report=instance
+                )
         
         return Response({"detail": "Reporte marcado como eliminado."}, status=status.HTTP_200_OK)
 

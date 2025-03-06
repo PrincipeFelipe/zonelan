@@ -9,7 +9,7 @@ class WorkReport(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'Borrador'),
         ('COMPLETED', 'Completado'),
-        ('DELETED', 'Eliminado')  # Añadimos este nuevo estado
+        ('DELETED', 'Eliminado')
     ]
 
     date = models.DateField(verbose_name='Fecha')
@@ -33,7 +33,7 @@ class WorkReport(models.Model):
         default='DRAFT',
         verbose_name='Estado'
     )
-    is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')  # Campo para borrado lógico
+    is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -66,19 +66,18 @@ class WorkReport(models.Model):
 
 class ReportImage(models.Model):
     report = models.ForeignKey(
-        'WorkReport',
+        WorkReport,
         on_delete=models.CASCADE,
         related_name='images',
-        null=True,
-        blank=True
+        verbose_name='Parte de trabajo'
     )
     image = models.ImageField(upload_to='report_images/')
-    description = models.TextField(blank=True)
     image_type = models.CharField(
         max_length=10,
         choices=[('BEFORE', 'Antes'), ('AFTER', 'Después')],
         default='BEFORE'
     )
+    description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -86,29 +85,15 @@ class ReportImage(models.Model):
         verbose_name_plural = 'Imágenes del parte'
 
     def __str__(self):
-        return f"Imagen {self.image_type} - Parte {self.report.id}"
-
-    def get_upload_path(self, filename):
-        """Define la ruta de almacenamiento basada en el ID del parte y el tipo de imagen"""
-        if self.report:
-            return f'report_images/{self.report.id}/{self.image_type.lower()}/{filename}'
-        return f'report_images/temp/{filename}'
-
-    def save(self, *args, **kwargs):
-        if not self.pk:  # Si es una nueva imagen
-            # Asegurarnos de que no haya '/media/' en el nombre
-            basename = os.path.basename(self.image.name)
-            self.image.name = self.get_upload_path(basename)
-        super().save(*args, **kwargs)
+        return f"Imagen {self.id} - Parte {self.report.id} ({self.get_image_type_display()})"
 
     def delete(self, *args, **kwargs):
         """Sobrescribe el método delete para eliminar también el archivo físico"""
         # Guardar la ruta del archivo antes de eliminarlo de la base de datos
         if self.image:
-            # Almacenar el path del archivo
             try:
                 image_path = self.image.path
-            except:
+            except Exception:
                 image_path = None
         else:
             image_path = None
@@ -125,7 +110,6 @@ class ReportImage(models.Model):
                 if os.path.exists(directory) and not os.listdir(directory):
                     os.rmdir(directory)
             except OSError as e:
-                # Log the error but don't raise it to avoid breaking the operation
                 print(f"Error al eliminar el archivo físico: {e}")
                 
         return result

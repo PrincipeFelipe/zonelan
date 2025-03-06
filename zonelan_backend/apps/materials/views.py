@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from django.db import transaction
 from .models import Material, MaterialControl
 from .serializers import MaterialSerializer, MaterialControlSerializer
 
@@ -64,6 +65,41 @@ class MaterialViewSet(viewsets.ModelViewSet):
             # Si no hay operación, solo actualizamos los campos básicos
             self.perform_update(serializer)
             return Response(serializer.data)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Obtener el parámetro que indica si devolver los materiales
+        return_materials = request.query_params.get('return_materials', 'false').lower() == 'true'
+        
+        # Marcar como eliminado en lugar de borrarlo realmente
+        instance.is_deleted = True
+        instance.status = 'DELETED'
+        instance.save()
+        
+        # Si se solicita devolver los materiales
+        if return_materials:
+            # Obtener los materiales utilizados en el reporte
+            materials_used = instance.materials_used.all()
+            
+            for material_used in materials_used:
+                # Devolver el material al inventario
+                material = material_used.material
+                material.quantity += material_used.quantity
+                material.save()
+                
+                # Registrar en el control como devolución
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=material_used.quantity,
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    report=instance
+                )
+        
+        return Response({"detail": "Reporte marcado como eliminado."}, status=status.HTTP_200_OK)
 
 class MaterialControlViewSet(viewsets.ModelViewSet):
     queryset = MaterialControl.objects.all().order_by('-date')

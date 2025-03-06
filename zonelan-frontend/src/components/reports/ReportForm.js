@@ -57,6 +57,7 @@ const ReportForm = () => {
     const [selectedImage, setSelectedImage] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [imagesToDelete, setImagesToDelete] = useState([]);
+    const [originalReport, setOriginalReport] = useState(null);
 
     useEffect(() => {
         fetchIncidents();
@@ -101,6 +102,9 @@ const ReportForm = () => {
                     ? response.data.after_images 
                     : []
                 );
+
+                // Guardar el reporte original para comparar cambios
+                setOriginalReport(response.data);
             }
         } catch (error) {
             console.error('Error fetching report:', error);
@@ -357,6 +361,55 @@ const ReportForm = () => {
                     confirmButtonText: 'Entendido'
                 });
                 return;
+            }
+
+            // Informar al usuario si hay cambios en los materiales
+            if (editMode) {
+                const originalMaterials = originalReport?.materials_used || [];
+                const currentMaterials = report.materials_used;
+                
+                // Verificar si hay cambios en los materiales
+                const materialsAdded = currentMaterials.filter(m => 
+                    !originalMaterials.some(om => om.material === m.material)
+                );
+                
+                const materialsRemoved = originalMaterials.filter(m => 
+                    !currentMaterials.some(cm => cm.material === m.material)
+                );
+                
+                if (materialsAdded.length > 0 || materialsRemoved.length > 0) {
+                    // Mostrar información sobre los cambios
+                    let message = '';
+                    
+                    if (materialsAdded.length > 0) {
+                        const addedNames = materialsAdded.map(m => 
+                            materials.find(mat => mat.id === m.material)?.name
+                        ).filter(Boolean);
+                        
+                        message += `Se añadirán como USO: ${addedNames.join(', ')}\n`;
+                    }
+                    
+                    if (materialsRemoved.length > 0) {
+                        const removedNames = materialsRemoved.map(m => 
+                            materials.find(mat => mat.id === m.material)?.name
+                        ).filter(Boolean);
+                        
+                        message += `Se devolverán al inventario: ${removedNames.join(', ')}`;
+                    }
+                    
+                    await Swal.fire({
+                        title: 'Cambios en materiales',
+                        text: message,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: 'Continuar',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        if (!result.isConfirmed) {
+                            throw new Error('Envío cancelado por el usuario');
+                        }
+                    });
+                }
             }
 
             // Preparar formData y continuar con el envío
