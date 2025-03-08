@@ -3,6 +3,8 @@ from django.conf import settings  # Importa settings
 from django.utils import timezone
 from apps.customers.models import Customer
 from apps.materials.models import Material
+from apps.materials.models import MaterialControl
+from django.db import models, transaction
 import uuid
 
 class Ticket(models.Model):
@@ -142,29 +144,33 @@ class TicketItem(models.Model):
             price = price - discount
         return price
     
+    # Simplificar el método save para evitar el problema de duplicidad
     def save(self, *args, **kwargs):
         # Si es una creación nueva, verificamos el precio actual del material
         if not self.pk and not self.unit_price:
             self.unit_price = self.material.price
-            
-        super().save(*args, **kwargs)
-        # Actualizar total del ticket
-        self.ticket.update_total()
         
-        # Actualizar inventario solo si el ticket no está cancelado
-        if self.ticket.status != 'CANCELED':
-            self.material.quantity -= self.quantity
-            self.material.save(update_fields=['quantity'])
+        # Guardar el item    
+        super().save(*args, **kwargs)
+        
+        # Actualizar total del ticket
+        if self.ticket:
+            self.ticket.update_total()
     
+    # Mantener el método delete para devolver material al inventario
+    @transaction.atomic
     def delete(self, *args, **kwargs):
-        # Devolver material al inventario si el ticket no está cancelado
-        if self.ticket.status != 'CANCELED':
-            self.material.quantity += self.quantity
-            self.material.save(update_fields=['quantity'])
-            
+        # Solo devolver el material si el ticket no está cancelado
+        if self.ticket and self.ticket.status != 'CANCELED':
+            if self.material and self.quantity:
+                self.material.quantity += self.quantity
+                self.material.save(update_fields=['quantity'])
+        
+        # Eliminar el item
         super().delete(*args, **kwargs)
+        
         # Actualizar total del ticket si aún existe
-        if Ticket.objects.filter(id=self.ticket.id).exists():
+        if self.ticket and Ticket.objects.filter(id=self.ticket.id).exists():
             self.ticket.update_total()
     
     def __str__(self):

@@ -28,7 +28,8 @@ const MaterialControlList = () => {
         operation: '',
         reason: '',
         material: '',
-        user: ''
+        user: '',
+        operation_type: ''
     });
 
     // Lista de materiales para el filtro
@@ -96,6 +97,21 @@ const MaterialControlList = () => {
             filteredData = filteredData.filter(control => control.user === parseInt(filters.user));
         }
 
+        // Filtrar por tipo de operación
+        if (filters.operation_type) {
+            switch(filters.operation_type) {
+                case 'report':
+                    filteredData = filteredData.filter(control => control.report !== null);
+                    break;
+                case 'ticket':
+                    filteredData = filteredData.filter(control => control.ticket !== null);
+                    break;
+                case 'other':
+                    filteredData = filteredData.filter(control => control.report === null && control.ticket === null);
+                    break;
+            }
+        }
+
         setFilteredControls(filteredData);
         setPage(0);
     };
@@ -113,7 +129,8 @@ const MaterialControlList = () => {
             operation: '',
             reason: '',
             material: '',
-            user: ''
+            user: '',
+            operation_type: ''
         });
     };
 
@@ -138,10 +155,12 @@ const MaterialControlList = () => {
         }
     };
 
-    const getReasonLabel = (reason) => {
+    // Modificar getReasonLabel para incluir tickets
+    const getReasonLabel = (reason, ticket) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
-            case 'VENTA': return 'Venta';
+            case 'VENTA': 
+                return ticket ? `Venta (Ticket)` : 'Venta';
             case 'RETIRADA': return 'Retirada';
             case 'USO': return 'Uso en reporte';
             case 'DEVOLUCION': return 'Devolución';
@@ -186,6 +205,41 @@ const MaterialControlList = () => {
                 to={`/dashboard/reports/${control.report}`}
             >
                 Ver reporte #{control.report}
+            </Link>
+        );
+    };
+
+    // Añadir función para mostrar referencias a tickets
+    const formatTicketReference = (control) => {
+        if (!control.ticket) {
+            return '-';
+        }
+        
+        // Si el ticket está cancelado
+        if (control.ticket_canceled) {
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Ticket #{control.ticket}
+                    </Typography>
+                    <Chip
+                        label="Cancelado"
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        sx={{ fontSize: '0.65rem' }}
+                    />
+                </Box>
+            );
+        }
+        
+        // Si el ticket existe y no está cancelado
+        return (
+            <Link 
+                component={RouterLink} 
+                to={`/dashboard/tickets/${control.ticket}`}
+            >
+                Ver ticket #{control.ticket}
             </Link>
         );
     };
@@ -277,6 +331,22 @@ const MaterialControlList = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth size="small">
+                                <InputLabel>Tipo de operación</InputLabel>
+                                <Select
+                                    name="operation_type"
+                                    value={filters.operation_type || ''}
+                                    label="Tipo de operación"
+                                    onChange={handleFilterChange}
+                                >
+                                    <MenuItem value="">Todos</MenuItem>
+                                    <MenuItem value="report">Reportes</MenuItem>
+                                    <MenuItem value="ticket">Tickets</MenuItem>
+                                    <MenuItem value="other">Otros</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
                         <Grid item xs={12}>
                             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                                 <Button 
@@ -304,19 +374,20 @@ const MaterialControlList = () => {
                                 <TableCell>Motivo</TableCell>
                                 <TableCell>Usuario</TableCell>
                                 <TableCell>Reporte</TableCell>
+                                <TableCell>Ticket</TableCell>
                                 <TableCell>Albarán</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} align="center">
+                                    <TableCell colSpan={9} align="center">
                                         Cargando...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredControls.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} align="center">
+                                    <TableCell colSpan={9} align="center">
                                         No hay registros disponibles
                                     </TableCell>
                                 </TableRow>
@@ -339,7 +410,7 @@ const MaterialControlList = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <Chip 
-                                                    label={getReasonLabel(control.reason)} 
+                                                    label={getReasonLabel(control.reason, control.ticket)} 
                                                     color={getReasonColor(control.reason)}
                                                     size="small"
                                                 />
@@ -348,6 +419,7 @@ const MaterialControlList = () => {
                                             <TableCell>
                                                 {formatDeletedReportReference(control)}
                                             </TableCell>
+                                            <TableCell>{formatTicketReference(control)}</TableCell>
                                             <TableCell>
                                                 {control.invoice_url ? (
                                                     <IconButton 

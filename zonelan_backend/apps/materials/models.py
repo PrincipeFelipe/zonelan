@@ -1,5 +1,7 @@
 from django.db import models
 from apps.users.models import User
+# Usar referencia de string para evitar importación circular
+# No importar: from apps.tickets.models import Ticket
 
 class Material(models.Model):
     name = models.CharField(max_length=255, verbose_name='Nombre')
@@ -50,6 +52,15 @@ class MaterialControl(models.Model):
         related_name='material_controls',
         verbose_name='Reporte asociado'
     )
+    # Añadir campo para ticket usando string reference
+    ticket = models.ForeignKey(
+        'tickets.Ticket',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='material_controls',
+        verbose_name='Ticket asociado'
+    )
     invoice_image = models.ImageField(
         upload_to='material_invoices/',
         null=True,
@@ -65,6 +76,20 @@ class MaterialControl(models.Model):
     def __str__(self):
         operation_text = 'Entrada' if self.operation == 'ADD' else 'Salida'
         reason_text = dict(self.REASON_CHOICES).get(self.reason, self.reason)
-        report_text = f" - Reporte #{self.report.id}" if self.report else ""
+        
+        # Referencias a reportes o tickets
+        ref_text = ""
+        if self.report:
+            try:
+                ref_text = f" - Reporte #{self.report.id}"
+            except:
+                ref_text = " - Reporte (eliminado)"
+        
+        if self.ticket:
+            try:
+                ref_text = f" - Ticket #{self.ticket.id}"
+            except:
+                ref_text = " - Ticket (eliminado)"
+        
         has_invoice = " [Con albarán]" if self.invoice_image else ""
-        return f"{self.material.name} - {operation_text} ({reason_text}){report_text}{has_invoice} - {self.date.strftime('%d/%m/%Y %H:%M')}"
+        return f"{self.material.name} - {operation_text} ({reason_text}){ref_text}{has_invoice} - {self.date.strftime('%d/%m/%Y %H:%M')}"

@@ -159,23 +159,39 @@ class TicketViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def cancel(self, request, pk=None):
-        """Cancelar ticket"""
+        """Cancela un ticket"""
         ticket = self.get_object()
         
-        if ticket.status == 'PAID':
+        # Verificar si el ticket está en estado pendiente
+        if ticket.status != 'PENDING':
             return Response(
-                {"detail": "No se puede cancelar un ticket ya pagado"},
+                {"detail": "Solo se pueden cancelar tickets pendientes."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        ticket.status = 'CANCELED'
-        ticket.save()
-        
-        # Restaurar stock de materiales
+        # Devolver los materiales al inventario
         for item in ticket.items.all():
+            # Registrar la devolución del material
+            MaterialControl.objects.create(
+                user=request.user,
+                material=item.material,
+                quantity=item.quantity,
+                operation='ADD',
+                reason='DEVOLUCION',
+                ticket=ticket,
+                date=timezone.now()
+            )
+            
+            # Devolver el material al inventario
             item.material.quantity += item.quantity
-            item.material.save()
+            item.material.save(update_fields=['quantity'])
+        
+        # Actualizar el ticket
+        ticket.status = 'CANCELED'
+        ticket.canceled_at = timezone.now()
+        ticket.save()
         
         serializer = self.get_serializer(ticket)
         return Response(serializer.data)
@@ -248,46 +264,139 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         return Response({'detail': 'Ticket eliminado correctamente.'}, 
                       status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['post'], url_path='items')
+    @transaction.atomic
+    def create_item(self, request, pk=None):
+        """Añadir un ítem al ticket"""
+        ticket = self.get_object()
+        
+        # Verificar si el ticket está en estado pendiente
+        if ticket.status != 'PENDING':
+            return Response(
+                {"detail": "Solo se pueden añadir productos a tickets pendientes."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Añadir ticket_id al request data
+        data = request.data.copy()
+        data['ticket'] = ticket.id
+        
+        serializer = TicketItemCreateSerializer(data=data, context={'request': request})
+        if serializer.is_valid():
+            try:
+                # Validar stock suficiente
+                material_id = data.get('material')
+                quantity = float(data.get('quantity', 0))
+                
+                if material_id and quantity > 0:
+                    material = get_object_or_404(Material, id=material_id)
+                    
+                    # Verificar si hay stock suficiente
+                    if material.quantity < quantity:
+                        return Response({
+                            'detail': f"No hay suficiente stock del material {material.name}. Disponible: {material.quantity}"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # Crear el ítem
+                    ticket_item = serializer.save()
+                    
+                    # Devolver la respuesta
+                    return Response(
+                        TicketItemSerializer(ticket_item).data, 
+                        status=status.HTTP_201_CREATED
+                    )
+                else:
+                    return Response(
+                        {"detail": "Datos incompletos o inválidos."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                logger.error(f"Error al crear ticket item: {str(e)}")
+                return Response(
+                    {"detail": f"Error al crear el item: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TicketItemViewSet(viewsets.ModelViewSet):
-    """API para gestionar items de un ticket"""
     serializer_class = TicketItemSerializer
-    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return TicketItem.objects.filter(ticket_id=self.kwargs['ticket_pk'])
+        return TicketItem.objects.all()
     
-    def perform_create(self, serializer):
-        ticket = get_object_or_404(Ticket, id=self.kwargs['ticket_pk'])
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        item = self.get_object()
         
-        # No permitir añadir items a tickets cancelados o pagados
-        if ticket.status != 'PENDING':
-            raise serializers.ValidationError(
-                "Solo se pueden añadir items a tickets pendientes"
+        # Verificar si el ticket está en estado pendiente
+        if item.ticket.status != 'PENDING':
+            return Response(
+                {"detail": "Solo se pueden eliminar productos de tickets pendientes."},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            
-        serializer.save(ticket=ticket)
-    
-    def perform_update(self, serializer):
-        ticket = get_object_or_404(Ticket, id=self.kwargs['ticket_pk'])
         
-        # No permitir modificar items de tickets cancelados o pagados
-        if ticket.status != 'PENDING':
-            raise serializers.ValidationError(
-                "Solo se pueden modificar items de tickets pendientes"
-            )
-            
-        serializer.save()
+        # Registrar la devolución del material al inventario
+        MaterialControl.objects.create(
+            user=request.user,
+            material=item.material,
+            quantity=item.quantity,
+            operation='ADD',
+            reason='DEVOLUCION',
+            ticket=item.ticket
+        )
+        
+        # Eliminar el item (el método delete ya se encarga de devolver el material al stock)
+        return super().destroy(request, *args, **kwargs)
     
-    def perform_destroy(self, instance):
-        # No permitir eliminar items de tickets cancelados o pagados
-        if instance.ticket.status != 'PENDING':
-            raise serializers.ValidationError(
-                "Solo se pueden eliminar items de tickets pendientes"
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        item = self.get_object()
+        
+        # Verificar si el ticket está en estado pendiente
+        if item.ticket.status != 'PENDING':
+            return Response(
+                {"detail": "Solo se pueden modificar productos de tickets pendientes."},
+                status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Guardar la cantidad anterior
+        old_quantity = item.quantity
+        
+        # Actualizar el item
+        serializer = self.get_serializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Si ha cambiado la cantidad, registrar el ajuste en el historial
+        new_quantity = serializer.validated_data.get('quantity', old_quantity)
+        if new_quantity != old_quantity:
+            quantity_diff = new_quantity - old_quantity
             
-        super().perform_destroy(instance)
+            if quantity_diff > 0:
+                # Se está aumentando la cantidad, registrar salida adicional
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=item.material,
+                    quantity=abs(quantity_diff),
+                    operation='REMOVE',
+                    reason='VENTA',
+                    ticket=item.ticket
+                )
+            else:
+                # Se está reduciendo la cantidad, registrar devolución
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=item.material,
+                    quantity=abs(quantity_diff),
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    ticket=item.ticket
+                )
+        
+        return Response(serializer.data)
 
 
 @action(detail=False, methods=['get'])

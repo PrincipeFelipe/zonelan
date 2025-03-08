@@ -64,15 +64,23 @@ const MaterialHistory = ({ open, onClose, material }) => {
         }
     };
 
-    const getReasonLabel = (reason, report, reportDeleted) => {
+    const getReasonLabel = (reason, report, reportDeleted, ticket, ticketCanceled) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
-            case 'VENTA': return 'Venta';
+            case 'VENTA': 
+                return ticket ? `Venta en ticket #${ticket}` : 'Venta';
             case 'RETIRADA': return 'Retirada';
-            case 'USO': return report ? `Uso en reporte #${report}` : 'Uso';
+            case 'USO': 
+                return report ? `Uso en reporte #${report}` : 'Uso';
             case 'DEVOLUCION': 
                 if (report && reportDeleted) {
                     return `Devolución por eliminación de reporte #${report}`;
+                }
+                if (ticket && ticketCanceled) {
+                    return `Devolución por cancelación de ticket #${ticket}`;
+                }
+                if (ticket) {
+                    return `Devolución de producto en ticket #${ticket}`;
                 }
                 return 'Devolución';
             default: return reason;
@@ -111,7 +119,13 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                         </TableCell>
                                         <TableCell>
                                             <Chip
-                                                label={getReasonLabel(record.reason, record.report, record.report_deleted)}
+                                                label={getReasonLabel(
+                                                    record.reason, 
+                                                    record.report, 
+                                                    record.report_deleted,
+                                                    record.ticket,
+                                                    record.ticket_canceled
+                                                )}
                                                 color={getReasonColor(record.reason)}
                                                 size="small"
                                             />

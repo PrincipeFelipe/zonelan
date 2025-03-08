@@ -1,9 +1,11 @@
+from django.db import transaction
 from rest_framework import serializers
 from .models import Ticket, TicketItem
 from apps.customers.serializers import CustomerSerializer
 from apps.materials.serializers import MaterialSerializer
 from apps.customers.models import Customer
 from apps.materials.models import Material
+from apps.materials.models import MaterialControl
 from django.utils import timezone
 
 class TicketItemSerializer(serializers.ModelSerializer):
@@ -102,4 +104,54 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 class TicketItemCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketItem
-        fields = ['material', 'description', 'quantity', 'unit_price']
+        fields = ['id', 'ticket', 'material', 'quantity', 'unit_price', 'discount_percentage', 'notes']
+        read_only_fields = ['id']
+    
+    def validate(self, data):
+        # Validar que hay suficiente stock
+        material = data.get('material')
+        quantity = data.get('quantity', 0)
+        
+        if quantity <= 0:
+            raise serializers.ValidationError({"quantity": "La cantidad debe ser mayor que cero"})
+        
+        # Verificar stock disponible
+        available_stock = material.quantity
+        
+        if quantity > available_stock:
+            raise serializers.ValidationError({
+                "quantity": f"Stock insuficiente. Disponible: {available_stock}, Solicitado: {quantity}"
+            })
+        
+        return data
+    
+    @transaction.atomic
+    def create(self, validated_data):
+        try:
+            request = self.context.get('request')
+            
+            # Guardar el ticket item
+            ticket_item = TicketItem.objects.create(**validated_data)
+            
+            # Actualizar el stock del material
+            material = validated_data['material']
+            quantity = validated_data['quantity']
+            material.quantity -= quantity
+            material.save(update_fields=['quantity'])
+            
+            # Registrar en MaterialControl
+            if request and request.user:
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=material,
+                    quantity=quantity,
+                    operation='REMOVE',
+                    reason='VENTA',
+                    ticket=validated_data['ticket'],
+                    date=timezone.now()
+                )
+            
+            return ticket_item
+        except Exception as e:
+            logger.error(f"Error en TicketItemCreateSerializer.create: {str(e)}")
+            raise serializers.ValidationError(f"Error al crear el item: {str(e)}")
