@@ -11,6 +11,8 @@ import MaterialList from './components/materials/MaterialList';
 import IncidentList from './components/incidents/IncidentList';
 import ReportRoutes from './components/reports/ReportRoutes';
 import MaterialRoutes from './routes/MaterialRoutes';
+import TicketRoutes from './routes/TicketRoutes';
+import GlobalToaster from './components/common/GlobalToaster';
 
 const theme = createTheme({
     palette: {
@@ -23,28 +25,38 @@ const theme = createTheme({
     },
 });
 
+function AppRoutes() {
+    return (
+        <Router>
+            <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/dashboard" element={
+                    <PrivateRoute>
+                        <Dashboard />
+                    </PrivateRoute>
+                }>
+                    <Route path="users" element={<UserList />} />
+                    <Route path="customers" element={<CustomerList />} />
+                    <Route path="materials" element={<MaterialList />} />
+                    <Route path="incidents" element={<IncidentList />} />
+                    <Route path="reports/*" element={<ReportRoutes />} />
+                    <Route path="materials/*" element={<MaterialRoutes />} />
+                    <Route path="tickets/*" element={<TicketRoutes />} />
+                </Route>
+                <Route path="/" element={<Navigate to="/dashboard" />} />
+            </Routes>
+        </Router>
+    );
+}
+
 function App() {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <Router>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/dashboard" element={
-                        <PrivateRoute>
-                            <Dashboard />
-                        </PrivateRoute>
-                    }>
-                        <Route path="users" element={<UserList />} />
-                        <Route path="customers" element={<CustomerList />} />
-                        <Route path="materials" element={<MaterialList />} />
-                        <Route path="incidents" element={<IncidentList />} />
-                        <Route path="reports/*" element={<ReportRoutes />} />
-                        <Route path="materials/*" element={<MaterialRoutes />} />
-                    </Route>
-                    <Route path="/" element={<Navigate to="/dashboard" />} />
-                </Routes>
-            </Router>
+            <>
+                <AppRoutes />
+                <GlobalToaster />
+            </>
         </ThemeProvider>
     );
 }

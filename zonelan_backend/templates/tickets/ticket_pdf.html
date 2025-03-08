@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ticket #{{ ticket.ticket_number }}</title>
+</head>
+<body>
+    {% if is_duplicate %}
+    <div class="duplicate">DUPLICADO</div>
+    {% endif %}
+    
+    <div class="ticket-header">
+        <h1>{{ company_info.name }}</h1>
+        <div class="company-info">
+            {{ company_info.address }}<br>
+            {{ company_info.postal_code }} {{ company_info.city }}<br>
+            CIF: {{ company_info.tax_id }}<br>
+            Tel: {{ company_info.phone }}<br>
+            {{ company_info.email }}
+        </div>
+    </div>
+    
+    <div class="ticket-data">
+        <strong>TICKET:</strong> {{ ticket.ticket_number }}<br>
+        <strong>FECHA:</strong> {{ ticket.created_at|date:"d/m/Y H:i" }}<br>
+        {% if ticket.customer %}
+        <strong>CLIENTE:</strong> {{ ticket.customer.name }}<br>
+        {% if ticket.customer.tax_id %}
+        <strong>CIF/NIF:</strong> {{ ticket.customer.tax_id }}<br>
+        {% endif %}
+        {% endif %}
+    </div>
+    
+    <table class="ticket-items">
+        <thead>
+            <tr>
+                <th>Artículo</th>
+                <th>Cant.</th>
+                <th>Precio</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ticket.items.all %}
+            <tr>
+                <td>{{ item.material.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td class="amount">{{ item.unit_price|floatformat:2 }} €</td>
+                <td class="amount">{{ item.total_price|floatformat:2 }} €</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total">
+                <td colspan="3"><strong>TOTAL</strong></td>
+                <td class="amount"><strong>{{ ticket.total_amount|floatformat:2 }} €</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <div>
+        <strong>FORMA DE PAGO:</strong> {{ ticket.get_payment_method_display }}<br>
+        <strong>ESTADO:</strong> {{ ticket.get_status_display }}<br>
+        {% if ticket.notes %}
+        <strong>NOTAS:</strong> {{ ticket.notes }}<br>
+        {% endif %}
+    </div>
+    
+    <div class="ticket-footer">
+        <p>Gracias por su compra</p>
+        <p>*Este documento no es una factura oficial*</p>
+    </div>
+</body>
+</html>

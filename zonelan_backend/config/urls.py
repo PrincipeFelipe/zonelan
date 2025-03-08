@@ -10,6 +10,7 @@ urlpatterns = [
     path('materials/', include('apps.materials.urls')),
     path('incidents/', include('apps.incidents.urls')),
     path('reports/', include('apps.reports.urls')),
+    path('tickets/', include('apps.tickets.urls')),
 ]
 
 # Añadir esta configuración para servir archivos multimedia en desarrollo

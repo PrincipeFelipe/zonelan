@@ -25,6 +25,8 @@ INSTALLED_APPS = [
     'apps.materials.apps.MaterialsConfig',
     'apps.incidents.apps.IncidentsConfig',
     'apps.reports.apps.ReportsConfig',
+    'apps.tickets',
+    'django_filters',
 ]
 
 # Middleware
@@ -109,7 +111,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    ]
+    ],
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
 # Configuración de JWT

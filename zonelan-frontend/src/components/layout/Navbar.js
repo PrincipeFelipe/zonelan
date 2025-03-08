@@ -22,7 +22,8 @@ import {
     Logout, 
     Person, 
     Lock,
-    Notifications
+    Notifications,
+    ReceiptLong
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -51,6 +52,7 @@ const Navbar = () => {
         { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' },
         { label: 'Incidencias', path: '/dashboard/incidents', minRole: 'User' },
         { label: 'Partes', path: '/dashboard/reports', minRole: 'User' },
+        { label: 'Tickets', path: '/dashboard/tickets', minRole: 'User', icon: <ReceiptLong /> }, // Nuevo enlace a tickets
     ];
 
     const handleMenu = (event) => {
