@@ -21,9 +21,15 @@ import {
     ListItem,
     ListItemText,
     ListItemSecondaryAction,
-    CircularProgress
+    CircularProgress,
+    Chip,
+    Divider,
+    Grid,
+    Card,
+    CardContent,
+    Tooltip // Añadir esta importación
 } from '@mui/material';
-import { Edit, Delete, Add, Visibility, Print } from '@mui/icons-material';
+import { Edit, Delete, Add, Visibility, Print, Close, KeyboardBackspace } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
@@ -31,8 +37,14 @@ import authService from '../../services/authService';
 import incidentService from '../../services/incidentService'; // Añadir esta importación
 import ReportDialog from '../reports/ReportDialog';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useReportCreation } from '../../hooks/useReportCreation';
 
 const IncidentList = () => {
+    const { createReportFromIncident } = useReportCreation();
+    
     const [incidents, setIncidents] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [openDialog, setOpenDialog] = useState(false);
@@ -49,6 +61,11 @@ const IncidentList = () => {
         resolution_notes: ''
     });
     const [loading, setLoading] = useState(true);
+    const [openIncidentDetailDialog, setOpenIncidentDetailDialog] = useState(false);
+    const [selectedIncidentDetail, setSelectedIncidentDetail] = useState(null);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [incidentReports, setIncidentReports] = useState([]);
+    const navigate = useNavigate();
 
     const STATUS_CHOICES = [
         { value: 'PENDING', label: 'Pendiente' },
@@ -64,10 +81,32 @@ const IncidentList = () => {
         { value: 'CRITICAL', label: 'Crítica' }
     ];
 
+    // Usar React Router para detectar parámetros en la URL
+    const location = useLocation();
+    const params = new URLSearchParams(location.search);
+    const editIncidentId = params.get('edit');
+
     useEffect(() => {
         fetchIncidents();
         fetchCustomers();
-    }, []);
+        
+        // Si hay un ID de incidencia para editar en los parámetros
+        if (editIncidentId) {
+            const fetchIncidentToEdit = async () => {
+                try {
+                    const response = await axios.get(`/incidents/incidents/${editIncidentId}/`);
+                    if (response.data) {
+                        handleOpenDialog(response.data);
+                    }
+                } catch (error) {
+                    console.error('Error al cargar incidencia para editar:', error);
+                    toast.error('No se pudo cargar la incidencia para editar');
+                }
+            };
+            
+            fetchIncidentToEdit();
+        }
+    }, [editIncidentId]);
 
     const fetchIncidents = async () => {
         setLoading(true);
@@ -482,94 +521,244 @@ const IncidentList = () => {
         }
     };
 
-    const columns = [
-        {
-            field: 'title',
-            headerName: 'Título',
-            flex: 1,
-        },
-        {
-            field: 'customer_name',
-            headerName: 'Cliente',
-            flex: 1,
-            // Añadir renderCell para manejar posibles valores nulos
-            renderCell: (params) => params.value || '-',
-        },
-        {
-            field: 'status',
-            headerName: 'Estado',
-            flex: 1,
-            renderCell: (params) => {
-                const status = STATUS_CHOICES.find(s => s.value === params.value);
-                return status ? status.label : params.value || '-';
-            },
-        },
-        {
-            field: 'priority',
-            headerName: 'Prioridad',
-            flex: 1,
-            renderCell: (params) => {
-                const priority = PRIORITY_CHOICES.find(p => p.value === params.value);
-                return priority ? priority.label : params.value || '-';
-            },
-        },
-        {
-            field: 'created_at',
-            headerName: 'Fecha',
-            flex: 1,
-            renderCell: (params) => {
-                if (!params.value) return '-';
+    const handleViewIncidentDetail = async (incident) => {
+        try {
+            setSelectedIncidentDetail(incident);
+            setLoadingDetail(true);
+            setOpenIncidentDetailDialog(true);
+            
+            // Obtener los reportes asociados a la incidencia
+            const response = await axios.get(`/reports/reports/?incident=${incident.id}`);
+            
+            if (Array.isArray(response.data)) {
+                setIncidentReports(response.data);
+            } else if (response.data.results && Array.isArray(response.data.results)) {
+                setIncidentReports(response.data.results);
+            } else {
+                setIncidentReports([]);
+                console.error('Formato de respuesta inesperado:', response.data);
+            }
+        } catch (error) {
+            console.error('Error al cargar los detalles de la incidencia:', error);
+            toast.error('Error al cargar los detalles de la incidencia');
+            setIncidentReports([]);
+        } finally {
+            setLoadingDetail(false);
+        }
+    };
 
-                try {
-                    const date = new Date(params.value);
-                    if (isNaN(date)) return 'Fecha inválida';
+    // Actualizar las columnas para mejorar la presentación
 
-                    return date.toLocaleDateString();
-                } catch (error) {
-                    return 'Fecha inválida';
+const columns = [
+    {
+        field: 'id',
+        headerName: 'ID',
+        width: 70,
+        renderCell: (params) => (
+            <Typography variant="body2" fontWeight="500" color="primary">
+                #{params.value}
+            </Typography>
+        ),
+    },
+    { 
+        field: 'title',
+        headerName: 'Título',
+        flex: 1,
+        minWidth: 200,
+        renderCell: (params) => (
+            <Box sx={{ py: 0.5 }}>
+                <Typography variant="body2" fontWeight="500">
+                    {params.value}
+                </Typography>
+                {params.row.description && (
+                    <Typography 
+                        variant="caption" 
+                        color="text.secondary"
+                        sx={{ 
+                            display: '-webkit-box',
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}
+                    >
+                        {params.row.description.substring(0, 60)}{params.row.description.length > 60 ? '...' : ''}
+                    </Typography>
+                )}
+            </Box>
+        ),
+    },
+    {
+        field: 'customer_name',
+        headerName: 'Cliente',
+        width: 180,
+        renderCell: (params) => {
+            const customer = customers.find(c => c.id === params.row.customer);
+            return (
+                <Box sx={{ py: 0.5 }}>
+                    <Typography variant="body2">
+                        {params.value || '-'}
+                    </Typography>
+                    {customer?.business_name && (
+                        <Typography variant="caption" color="text.secondary">
+                            {customer.business_name}
+                        </Typography>
+                    )}
+                </Box>
+            );
+        },
+    },
+    {
+        field: 'status',
+        headerName: 'Estado',
+        width: 120,
+        renderCell: (params) => {
+            const statusMap = {
+                'PENDING': { label: 'Pendiente', color: '#ed6c02', variant: 'outlined' },
+                'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', variant: 'outlined' },
+                'RESOLVED': { label: 'Resuelta', color: '#2e7d32', variant: 'outlined' },
+                'CLOSED': { label: 'Cerrada', color: '#616161', variant: 'outlined' }
+            };
+            
+            const status = statusMap[params.value] || { label: params.value, color: '#757575', variant: 'outlined' };
+            
+            return (
+                <Chip
+                    size="small"
+                    label={status.label}
+                    sx={{
+                        color: status.color,
+                        border: `1px solid ${status.color}`,
+                        fontWeight: 500,
+                        fontSize: '0.75rem',
+                        height: 24,
+                        backgroundColor: 'transparent'
+                    }}
+                    variant={status.variant}
+                />
+            );
+        },
+    },
+    {
+        field: 'priority',
+        headerName: 'Prioridad',
+        width: 100,
+        renderCell: (params) => {
+            const priorityMap = {
+                'LOW': { label: 'Baja', color: '#2e7d32', variant: 'outlined' },
+                'MEDIUM': { label: 'Media', color: '#0288d1', variant: 'outlined' },
+                'HIGH': { label: 'Alta', color: '#ed6c02', variant: 'outlined' },
+                'CRITICAL': { label: 'Crítica', color: '#d32f2f', variant: 'outlined' }
+            };
+            
+            const priority = priorityMap[params.value] || { label: params.value, color: '#757575', variant: 'outlined' };
+            
+            return (
+                <Chip
+                    size="small"
+                    label={priority.label}
+                    sx={{
+                        color: priority.color,
+                        border: `1px solid ${priority.color}`,
+                        fontWeight: 500,
+                        fontSize: '0.75rem',
+                        height: 24,
+                        backgroundColor: 'transparent'
+                    }}
+                    variant={priority.variant}
+                />
+            );
+        },
+    },
+    {
+        field: 'created_at',
+        headerName: 'Fecha',
+        width: 120,
+        renderCell: (params) => {
+            if (!params.value) return '-';
+
+            try {
+                const date = new Date(params.value);
+                const now = new Date();
+                const diffTime = Math.abs(now - date);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                // Determinar si la fecha es reciente (menos de 3 días)
+                const isRecent = diffDays < 3;
+                
+                return (
+                    <Box sx={{ lineHeight: 1.2 }}>
+                        <Typography variant="body2">
+                            {format(date, 'dd/MM/yyyy')}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {format(date, 'HH:mm')}
+                        </Typography>
+                    </Box>
+                );
+            } catch (error) {
+                return 'Fecha inválida';
+            }
+        },
+    },
+    {
+        field: 'actions',
+        headerName: 'Acciones',
+        width: 140,
+        align: 'center',
+        headerAlign: 'center',
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                gap: '4px',
+                '& .MuiIconButton-root': {
+                    padding: '4px',
+                    fontSize: '0.875rem',
                 }
-            },
-        },
-        {
-            field: 'actions',
-            headerName: 'Acciones',
-            width: 180,
-            sortable: false,
-            filterable: false,
-            renderCell: (params) => (
-                <Box>
+            }}>
+                <Tooltip title="Editar">
                     <IconButton 
                         onClick={() => handleOpenDialog(params.row)} 
                         size="small"
-                        title="Editar"
+                        sx={{ color: 'primary.main' }}
                     >
-                        <Edit />
+                        <Edit fontSize="small" />
                     </IconButton>
+                </Tooltip>
+                <Tooltip title="Ver detalle">
                     <IconButton 
-                        onClick={() => handleViewReports(params.row)} 
+                        onClick={() => handleViewIncidentDetail(params.row)} 
                         size="small"
-                        title="Ver reportes"
+                        sx={{ color: 'info.main' }}
                     >
-                        <Visibility />
+                        <Visibility fontSize="small" />
                     </IconButton>
+                </Tooltip>
+                <Tooltip title="Imprimir">
                     <IconButton 
                         onClick={() => handlePrintIncident(params.row)} 
                         size="small"
-                        title="Imprimir"
+                        sx={{ color: 'text.secondary' }}
                     >
-                        <Print />
+                        <Print fontSize="small" />
                     </IconButton>
+                </Tooltip>
+                <Tooltip title="Eliminar">
                     <IconButton 
                         onClick={() => handleDeleteIncident(params.row)} 
                         size="small"
-                        title="Eliminar"
+                        sx={{ color: 'error.main' }}
                     >
-                        <Delete />
+                        <Delete fontSize="small" />
                     </IconButton>
-                </Box>
-            ),
-        },
-    ];
+                </Tooltip>
+            </Box>
+        ),
+    },
+];
 
     const localeText = {
         // Toolbar
@@ -644,6 +833,11 @@ const IncidentList = () => {
         }
     };
 
+    // Función para determinar si se permite crear nuevos partes
+    const canCreateNewReport = (status) => {
+        return status !== 'RESOLVED' && status !== 'CLOSED';
+    };
+
     return (
         <>
             <Toaster position="top-right" />
@@ -675,6 +869,9 @@ const IncidentList = () => {
                                     pagination: {
                                         paginationModel: { pageSize: 10, page: 0 },
                                     },
+                                    sorting: {
+                                        sortModel: [{ field: 'created_at', sort: 'desc' }],
+                                    },
                                 }}
                                 pageSizeOptions={[10, 25, 50]}
                                 disableRowSelectionOnClick
@@ -690,9 +887,42 @@ const IncidentList = () => {
                                 getRowId={(row) => row.id}
                                 localeText={localeText}
                                 sx={{
+                                    border: '1px solid #E0E0E0',
+                                    borderRadius: 1,
+                                    '& .MuiDataGrid-row': {
+                                        borderBottom: '1px solid #F5F5F5',
+                                    },
+                                    '& .MuiDataGrid-columnHeader': {
+                                        backgroundColor: '#F5F5F5',
+                                        borderRight: '1px solid #E0E0E0',
+                                        '&:last-child': {
+                                            borderRight: 'none',
+                                        },
+                                    },
+                                    '& .MuiDataGrid-cell': {
+                                        borderRight: '1px solid #F5F5F5',
+                                        '&:last-child': {
+                                            borderRight: 'none',
+                                        },
+                                        padding: '8px 16px'
+                                    },
+                                    '& .MuiDataGrid-columnHeaders': {
+                                        borderBottom: '2px solid #E0E0E0',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 'bold',
+                                    },
                                     '& .MuiDataGrid-toolbarContainer': {
-                                        borderBottom: '1px solid rgba(224, 224, 224, 1)',
+                                        borderBottom: '1px solid #E0E0E0',
                                         padding: '8px 16px',
+                                    },
+                                    '& .MuiDataGrid-footerContainer': {
+                                        borderTop: '2px solid #E0E0E0',
+                                    },
+                                    '& .MuiDataGrid-virtualScroller': {
+                                        backgroundColor: '#FFFFFF',
+                                    },
+                                    '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                                        outline: 'none',
                                     },
                                 }}
                             />
@@ -803,8 +1033,252 @@ const IncidentList = () => {
                     }}
                 />
             )}
+
+            {/* Diálogo para mostrar el detalle de la incidencia */}
+            <Dialog 
+                open={openIncidentDetailDialog} 
+                onClose={() => setOpenIncidentDetailDialog(false)}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Box display="flex" alignItems="center">
+                            <Typography variant="h6">
+                                Incidencia #{selectedIncidentDetail?.id}: {selectedIncidentDetail?.title}
+                            </Typography>
+                        </Box>
+                        <IconButton onClick={() => setOpenIncidentDetailDialog(false)} size="small">
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent dividers>
+                    {loadingDetail ? (
+                        <Box display="flex" justifyContent="center" mt={3} mb={3}>
+                            <CircularProgress />
+                        </Box>
+                    ) : selectedIncidentDetail ? (
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} md={7}>
+                                <Paper sx={{ p: 2, height: '100%' }}>
+                                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                                        <Typography variant="h6">Detalles</Typography>
+                                        <Box display="flex" gap={1}>
+                                            {renderStatusChip(selectedIncidentDetail.status)}
+                                            {renderPriorityChip(selectedIncidentDetail.priority)}
+                                        </Box>
+                                    </Box>
+                                    <Divider sx={{ mb: 2 }} />
+                                    
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Cliente</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {selectedIncidentDetail.customer_name}
+                                                {customers.find(c => c.id === selectedIncidentDetail.customer)?.business_name && (
+                                                    <Typography variant="caption" display="block" color="text.secondary">
+                                                        {customers.find(c => c.id === selectedIncidentDetail.customer)?.business_name}
+                                                    </Typography>
+                                                )}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Fecha de creación</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {format(new Date(selectedIncidentDetail.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Reportada por</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {selectedIncidentDetail.reported_by_name || 'No especificado'}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Última actualización</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {format(new Date(selectedIncidentDetail.updated_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                            </Typography>
+                                        </Grid>
+                                    </Grid>
+                                    
+                                    <Box mt={2}>
+                                        <Typography variant="subtitle2">Descripción</Typography>
+                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                            <Typography variant="body1">{selectedIncidentDetail.description}</Typography>
+                                        </Paper>
+                                    </Box>
+                                    
+                                    {selectedIncidentDetail.resolution_notes && (
+                                        <Box mt={2}>
+                                            <Typography variant="subtitle2">Notas de resolución</Typography>
+                                            <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                                <Typography variant="body1">{selectedIncidentDetail.resolution_notes}</Typography>
+                                            </Paper>
+                                        </Box>
+                                    )}
+                                </Paper>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={5}>
+                                <Paper sx={{ p: 2, height: '100%' }}>
+                                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                                        <Typography variant="h6">Partes de trabajo ({incidentReports.length})</Typography>
+                                    </Box>
+                                    <Divider sx={{ mb: 2 }} />
+                                    
+                                    {incidentReports.length > 0 ? (
+                                        <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                                            {incidentReports.map((report) => (
+                                                <Card key={report.id} sx={{ mb: 2 }}>
+                                                    <CardContent>
+                                                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                                Parte #{report.id}
+                                                            </Typography>
+                                                            <Chip 
+                                                                size="small" 
+                                                                label={report.status === 'DRAFT' ? 'Borrador' : 'Completado'} 
+                                                                color={report.status === 'DRAFT' ? 'warning' : 'success'} 
+                                                            />
+                                                        </Box>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Fecha: {format(new Date(report.date), 'dd/MM/yyyy', { locale: es })}
+                                                        </Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Horas trabajadas: {report.hours_worked || 'No especificado'}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            Técnicos: {report.technicians?.map(t => t.technician_name).join(', ') || 'Sin asignar'}
+                                                        </Typography>
+                                                        <Box mt={1}>
+                                                            <Button 
+                                                                size="small" 
+                                                                variant="outlined"
+                                                                onClick={() => {
+                                                                    setOpenIncidentDetailDialog(false);
+                                                                    navigate(`/dashboard/reports/${report.id}`);
+                                                                }}
+                                                            >
+                                                                Ver parte
+                                                            </Button>
+                                                        </Box>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body1" align="center" py={3}>
+                                            No hay partes de trabajo registrados para esta incidencia.
+                                        </Typography>
+                                    )}
+                                    
+                                    {canCreateNewReport(selectedIncidentDetail.status) ? (
+                                        <Box mt={2} display="flex" justifyContent="center">
+                                            <Button 
+                                                variant="contained" 
+                                                onClick={() => {
+                                                    setOpenIncidentDetailDialog(false);
+                                                    createReportFromIncident(selectedIncidentDetail.id);
+                                                }}
+                                            >
+                                                Crear nuevo parte
+                                            </Button>
+                                        </Box>
+                                    ) : (
+                                        <Box mt={2} p={2} bgcolor="rgba(0, 0, 0, 0.04)" borderRadius={1} textAlign="center">
+                                            <Typography variant="body2" color="text.secondary">
+                                                No se pueden crear nuevos partes de trabajo para incidencias {selectedIncidentDetail.status === 'RESOLVED' ? 'resueltas' : 'cerradas'}.
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                </Paper>
+                            </Grid>
+                        </Grid>
+                    ) : (
+                        <Typography variant="body1" align="center" py={3}>
+                            Error al cargar los detalles de la incidencia.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button 
+                        variant="outlined" 
+                        startIcon={<Edit />}
+                        onClick={() => {
+                            setOpenIncidentDetailDialog(false);
+                            handleOpenDialog(selectedIncidentDetail);
+                        }}
+                    >
+                        Editar
+                    </Button>
+                    <Button 
+                        variant="outlined"
+                        startIcon={<Print />}
+                        onClick={() => {
+                            setOpenIncidentDetailDialog(false);
+                            handlePrintIncident(selectedIncidentDetail);
+                        }}
+                    >
+                        Imprimir
+                    </Button>
+                    <Button onClick={() => setOpenIncidentDetailDialog(false)}>Cerrar</Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
+    
+    // Funciones de ayuda para renderizar chips de estado y prioridad
+    function renderStatusChip(status) {
+        const statusMap = {
+            'PENDING': { label: 'Pendiente', color: '#ed6c02', border: '#ed6c02' },
+            'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', border: '#0288d1' },
+            'RESOLVED': { label: 'Resuelta', color: '#2e7d32', border: '#2e7d32' },
+            'CLOSED': { label: 'Cerrada', color: '#616161', border: '#616161' }
+        };
+        
+        const statusConfig = statusMap[status] || { label: status, color: '#757575', border: '#757575' };
+        
+        return (
+            <Chip
+                size="small"
+                label={statusConfig.label}
+                sx={{
+                    color: statusConfig.color,
+                    border: `1px solid ${statusConfig.border}`,
+                    backgroundColor: 'transparent',
+                    fontWeight: 500
+                }}
+                variant="outlined"
+            />
+        );
+    }
+
+    function renderPriorityChip(priority) {
+        const priorityMap = {
+            'LOW': { label: 'Baja', color: '#2e7d32', border: '#2e7d32' },
+            'MEDIUM': { label: 'Media', color: '#0288d1', border: '#0288d1' },
+            'HIGH': { label: 'Alta', color: '#ed6c02', border: '#ed6c02' },
+            'CRITICAL': { label: 'Crítica', color: '#d32f2f', border: '#d32f2f' }
+        };
+        
+        const priorityConfig = priorityMap[priority] || { label: priority, color: '#757575', border: '#757575' };
+        
+        return (
+            <Chip
+                size="small"
+                label={priorityConfig.label}
+                sx={{
+                    color: priorityConfig.color,
+                    border: `1px solid ${priorityConfig.border}`,
+                    backgroundColor: 'transparent',
+                    fontWeight: 500
+                }}
+                variant="outlined"
+            />
+        );
+    }
 };
 
 export default IncidentList;

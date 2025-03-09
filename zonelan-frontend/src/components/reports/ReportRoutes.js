@@ -9,6 +9,7 @@ const ReportRoutes = () => {
         <Routes>
             <Route index element={<ReportList />} />
             <Route path="create" element={<ReportForm />} />
+            <Route path="new" element={<ReportForm />} /> {/* Alias opcional */}
             <Route path=":id" element={<ReportDetail />} />
             <Route path=":id/edit" element={<ReportForm />} />
         </Routes>

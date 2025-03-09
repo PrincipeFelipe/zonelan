@@ -19,19 +19,26 @@ instance.interceptors.request.use(
     error => Promise.reject(error)
 );
 
+// Asegurarnos que el interceptor no redireccione de forma agresiva
+
 // Interceptor para manejar respuestas de error
 instance.interceptors.response.use(
     response => response,
     error => {
-        // Si el error es 401 (No autorizado), redirigir al login
+        // Si el error es 401 (No autorizado), redirigir al login solo si:
+        // 1. No estamos ya en la página de login
+        // 2. No estamos intentando iniciar sesión
         if (error.response && error.response.status === 401) {
             // Limpiar datos de sesión
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             localStorage.removeItem('refresh');
             
-            // Redirigir a login (si no estamos ya en la página de login)
-            if (!window.location.pathname.includes('/login')) {
+            // Redirigir a login solo si no estamos en login o intentando hacer login
+            const isLoginPath = window.location.pathname.includes('/login');
+            const isLoginRequest = error.config.url.includes('/token/');
+            
+            if (!isLoginPath && !isLoginRequest) {
                 window.location.href = '/login';
             }
         }

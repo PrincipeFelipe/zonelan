@@ -6,17 +6,35 @@ import {
 } from '@mui/material';
 import { KeyboardBackspace, Print, Edit } from '@mui/icons-material';
 import { toast, Toaster } from 'react-hot-toast';
+import Swal from 'sweetalert2'; // Añadir esta importación
 import axios from '../../utils/axiosConfig';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ReportDialog from '../reports/ReportDialog';
+import { useReportCreation } from '../../hooks/useReportCreation';
 
 const IncidentDetail = () => {
+    const { createReportFromIncident } = useReportCreation();
     const { id } = useParams();
     const navigate = useNavigate();
     const [incident, setIncident] = useState(null);
     const [loading, setLoading] = useState(true);
     const [openReportDialog, setOpenReportDialog] = useState(false);
+    
+    // Añadir los valores constantes para poder utilizarlos en la función de impresión
+    const STATUS_CHOICES = [
+        { value: 'PENDING', label: 'Pendiente' },
+        { value: 'IN_PROGRESS', label: 'En Progreso' },
+        { value: 'RESOLVED', label: 'Resuelta' },
+        { value: 'CLOSED', label: 'Cerrada' }
+    ];
+    
+    const PRIORITY_CHOICES = [
+        { value: 'LOW', label: 'Baja' },
+        { value: 'MEDIUM', label: 'Media' },
+        { value: 'HIGH', label: 'Alta' },
+        { value: 'CRITICAL', label: 'Crítica' }
+    ];
 
     useEffect(() => {
         fetchIncident();
@@ -40,9 +58,259 @@ const IncidentDetail = () => {
         setOpenReportDialog(true);
     };
 
+    // Reemplazar la función handleEditIncident para que coincida con el comportamiento del listado
     const handleEditIncident = () => {
-        // Redirigir a la página de edición o abrir un diálogo para editar
         navigate(`/dashboard/incidents?edit=${id}`);
+    };
+
+    // Función para imprimir incidencia
+    const handlePrintIncident = async () => {
+        try {
+            const response = await axios.get(`/reports/reports/?incident=${id}`);
+            const reports = response.data;
+
+            // Preguntar al usuario qué tipo de informe desea generar
+            const result = await Swal.fire({
+                title: 'Seleccione el tipo de informe',
+                text: "¿Qué tipo de informe desea generar?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Unificado',
+                cancelButtonText: 'Segregado',
+                showCloseButton: true
+            });
+
+            // Si se cierra el diálogo sin seleccionar una opción
+            if (result.isDismissed && !result.dismiss === Swal.DismissReason.cancel) {
+                return;
+            }
+
+            // Informe Unificado
+            if (result.isConfirmed) {
+                // Calcular totales
+                const totalHours = reports.reduce((sum, report) => sum + (Number(report.hours_worked) || 0), 0);
+                
+                // Agrupar técnicos únicos
+                const uniqueTechnicians = [...new Set(reports.flatMap(report => 
+                    report.technicians?.map(tech => tech.technician_name) || []
+                ))];
+
+                // Agrupar materiales
+                const materialsMap = new Map();
+                reports.forEach(report => {
+                    report.materials_used?.forEach(material => {
+                        const current = materialsMap.get(material.material_name) || 0;
+                        materialsMap.set(material.material_name, current + material.quantity);
+                    });
+                });
+
+                const unifiedContent = `
+                    <html>
+                        <head>
+                            <title>Informe Unificado - Incidencia #${incident.id}</title>
+                            <style>
+                                body { 
+                                    font-family: Arial, sans-serif;
+                                    padding: 20px;
+                                }
+                                .section {
+                                    margin-bottom: 20px;
+                                    break-inside: avoid;
+                                }
+                                .section-title {
+                                    font-size: 16px;
+                                    font-weight: bold;
+                                    border-bottom: 1px solid #ccc;
+                                    padding-bottom: 5px;
+                                    margin-bottom: 10px;
+                                }
+                                .info-row {
+                                    margin: 5px 0;
+                                }
+                                .info-label {
+                                    font-weight: bold;
+                                }
+                                table {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    margin: 10px 0;
+                                }
+                                th, td {
+                                    border: 1px solid #ccc;
+                                    padding: 8px;
+                                    text-align: left;
+                                }
+                                @media print {
+                                    @page { margin: 2cm; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>Informe Unificado - Incidencia #${incident.id}</h1>
+                            
+                            <div class="section">
+                                <div class="section-title">Información de la Incidencia</div>
+                                <div class="info-row"><span class="info-label">Título:</span> ${incident.title}</div>
+                                <div class="info-row"><span class="info-label">Cliente:</span> ${incident.customer_name}</div>
+                                <div class="info-row"><span class="info-label">Estado:</span> ${STATUS_CHOICES.find(s => s.value === incident.status)?.label}</div>
+                                <div class="info-row"><span class="info-label">Prioridad:</span> ${PRIORITY_CHOICES.find(p => p.value === incident.priority)?.label}</div>
+                                <div class="info-row"><span class="info-label">Fecha creación:</span> ${new Date(incident.created_at).toLocaleDateString()}</div>
+                                <div class="info-row"><span class="info-label">Descripción:</span> ${incident.description}</div>
+                                ${incident.resolution_notes ? `<div class="info-row"><span class="info-label">Notas de resolución:</span> ${incident.resolution_notes}</div>` : ''}
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Resumen del Trabajo</div>
+                                <div class="info-row"><span class="info-label">Total Horas Trabajadas:</span> ${totalHours}</div>
+                                <div class="info-row"><span class="info-label">Número de Partes:</span> ${reports.length}</div>
+                                <div class="info-row"><span class="info-label">Técnicos Involucrados:</span> ${uniqueTechnicians.join(', ')}</div>
+                            </div>
+
+                            ${materialsMap.size > 0 ? `
+                                <div class="section">
+                                    <div class="section-title">Total Materiales Utilizados</div>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Material</th>
+                                                <th>Cantidad Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${Array.from(materialsMap).map(([material, quantity]) => `
+                                                <tr>
+                                                    <td>${material}</td>
+                                                    <td>${quantity}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ` : ''}
+                        </body>
+                    </html>
+                `;
+
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(unifiedContent);
+                printWindow.document.close();
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            } else {
+                // Informe Segregado
+                const printContent = `
+                    <html>
+                        <head>
+                            <title>Informe de Incidencia #${incident.id}</title>
+                            <style>
+                                body { 
+                                    font-family: Arial, sans-serif;
+                                    padding: 20px;
+                                }
+                                .section {
+                                    margin-bottom: 20px;
+                                    break-inside: avoid;
+                                }
+                                .section-title {
+                                    font-size: 16px;
+                                    font-weight: bold;
+                                    border-bottom: 1px solid #ccc;
+                                    padding-bottom: 5px;
+                                    margin-bottom: 10px;
+                                }
+                                .info-row {
+                                    margin: 5px 0;
+                                }
+                                .info-label {
+                                    font-weight: bold;
+                                }
+                                .report {
+                                    border: 1px solid #ccc;
+                                    padding: 10px;
+                                    margin: 10px 0;
+                                    break-inside: avoid;
+                                }
+                                table {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    margin: 10px 0;
+                                }
+                                th, td {
+                                    border: 1px solid #ccc;
+                                    padding: 8px;
+                                    text-align: left;
+                                }
+                                @media print {
+                                    @page { margin: 2cm; }
+                                    .report { page-break-inside: avoid; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>Informe de Incidencia #${incident.id}</h1>
+                            
+                            <div class="section">
+                                <div class="section-title">Información de la Incidencia</div>
+                                <div class="info-row"><span class="info-label">Título:</span> ${incident.title}</div>
+                                <div class="info-row"><span class="info-label">Cliente:</span> ${incident.customer_name}</div>
+                                <div class="info-row"><span class="info-label">Estado:</span> ${STATUS_CHOICES.find(s => s.value === incident.status)?.label}</div>
+                                <div class="info-row"><span class="info-label">Prioridad:</span> ${PRIORITY_CHOICES.find(p => p.value === incident.priority)?.label}</div>
+                                <div class="info-row"><span class="info-label">Fecha creación:</span> ${new Date(incident.created_at).toLocaleDateString()}</div>
+                                <div class="info-row"><span class="info-label">Descripción:</span> ${incident.description}</div>
+                                ${incident.resolution_notes ? `<div class="info-row"><span class="info-label">Notas de resolución:</span> ${incident.resolution_notes}</div>` : ''}
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Partes de Trabajo (${reports.length})</div>
+                                ${reports.map(report => `
+                                    <div class="report">
+                                        <div class="info-row"><span class="info-label">Fecha:</span> ${new Date(report.date).toLocaleDateString()}</div>
+                                        <div class="info-row"><span class="info-label">Estado:</span> ${report.status === 'DRAFT' ? 'Borrador' : 'Completado'}</div>
+                                        <div class="info-row"><span class="info-label">Horas trabajadas:</span> ${report.hours_worked || 'No especificadas'}</div>
+                                        <div class="info-row"><span class="info-label">Técnicos:</span> ${report.technicians?.map(tech => tech.technician_name).join(', ') || 'Sin asignar'}</div>
+                                        <div class="info-row"><span class="info-label">Descripción:</span> ${report.description}</div>
+                                        ${report.materials_used?.length > 0 ? `
+                                            <div class="info-row">
+                                                <span class="info-label">Materiales utilizados:</span>
+                                                <table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Material</th>
+                                                            <th>Cantidad</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        ${report.materials_used.map(material => `
+                                                            <tr>
+                                                                <td>${material.material_name}</td>
+                                                                <td>${material.quantity}</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </body>
+                    </html>
+                `;
+
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(printContent);
+                printWindow.document.close();
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }
+        } catch (error) {
+            console.error('Error al imprimir:', error);
+            toast.error('Error al generar el informe');
+        }
     };
 
     const getStatusChip = (status) => {
@@ -103,6 +371,11 @@ const IncidentDetail = () => {
         return <Chip size="small" label={label} color={color} />;
     };
 
+    // Función para determinar si se permite crear nuevos partes
+    const canCreateNewReport = (status) => {
+        return status !== 'RESOLVED' && status !== 'CLOSED';
+    };
+
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
@@ -144,14 +417,14 @@ const IncidentDetail = () => {
                             startIcon={<Edit />}
                             variant="outlined"
                             sx={{ mr: 1 }}
-                            onClick={handleEditIncident}
+                            onClick={handleEditIncident}  // Uso de la función actualizada
                         >
                             Editar
                         </Button>
                         <Button 
                             startIcon={<Print />}
                             variant="contained"
-                            onClick={() => navigate(`/dashboard/incidents?print=${id}`)}
+                            onClick={handlePrintIncident}  // Uso de la función nueva en lugar de navigate
                         >
                             Imprimir
                         </Button>
@@ -225,14 +498,22 @@ const IncidentDetail = () => {
                             </Box>
                             <Divider sx={{ mb: 2 }} />
                             
-                            <Box mt={2} display="flex" justifyContent="center">
-                                <Button 
-                                    variant="contained" 
-                                    onClick={() => navigate(`/dashboard/reports/new?incident=${incident.id}`)}
-                                >
-                                    Crear nuevo parte
-                                </Button>
-                            </Box>
+                            {canCreateNewReport(incident.status) ? (
+                                <Box mt={2} display="flex" justifyContent="center">
+                                    <Button 
+                                        variant="contained" 
+                                        onClick={() => createReportFromIncident(id)}
+                                    >
+                                        Crear nuevo parte
+                                    </Button>
+                                </Box>
+                            ) : (
+                                <Box mt={2} p={2} bgcolor="rgba(0, 0, 0, 0.04)" borderRadius={1} textAlign="center">
+                                    <Typography variant="body2" color="text.secondary">
+                                        No se pueden crear nuevos partes de trabajo para incidencias {incident.status === 'RESOLVED' ? 'resueltas' : 'cerradas'}.
+                                    </Typography>
+                                </Box>
+                            )}
                         </Paper>
                     </Grid>
                 </Grid>

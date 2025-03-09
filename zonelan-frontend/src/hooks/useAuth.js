@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('refresh', refresh);
             localStorage.setItem('user', JSON.stringify(user));
             
+            // Actualizar el estado de usuario ANTES de retornar
             setUser(user);
             return true;
         } catch (error) {

@@ -26,10 +26,21 @@ const Login = () => {
 
     const handleSubmit = async (values, { setSubmitting }) => {
         try {
-            await authService.login(values);
-            navigate('/dashboard');
+            setError(''); // Limpiar errores anteriores
+            const result = await authService.login(values);
+            
+            if (result) {
+                // Asegurar que la redirección ocurra después de que authService.login se complete
+                console.log('Login exitoso, redirigiendo al dashboard...');
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 100); // Pequeño retraso para asegurar que los estados se actualicen
+            } else {
+                setError('Credenciales inválidas');
+            }
         } catch (err) {
-            setError(err.message);
+            console.error('Error durante el inicio de sesión:', err);
+            setError(err.message || 'Error al iniciar sesión');
         } finally {
             setSubmitting(false);
         }

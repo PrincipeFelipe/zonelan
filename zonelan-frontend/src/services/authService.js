@@ -10,6 +10,11 @@ const authService = {
             if (response.data.access) {
                 localStorage.setItem('token', response.data.access);
                 
+                // Si hay un token de refresh, guardarlo también
+                if (response.data.refresh) {
+                    localStorage.setItem('refresh', response.data.refresh);
+                }
+                
                 // Decodificamos el token JWT para obtener el ID del usuario
                 const tokenData = JSON.parse(atob(response.data.access.split('.')[1]));
                 
@@ -49,9 +54,9 @@ const authService = {
                     console.error('Error al obtener conteo de incidencias:', countError);
                 }
                 
-                return userResponse.data;
+                return true; // Asegurar que devolvemos true para indicar éxito
             }
-            return response.data;
+            return false; // No hay token de acceso en la respuesta
         } catch (error) {
             console.error('Error en login:', error);
             throw new Error(error.response?.data?.detail || 'Error en el inicio de sesión');

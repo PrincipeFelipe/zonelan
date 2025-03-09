@@ -17,7 +17,8 @@ import {
     TextField,
     Box,
     CircularProgress,
-    Chip
+    Chip,
+    MenuItem
 } from '@mui/material';
 import { Edit, Delete, Add, Print, Visibility, AssessmentOutlined, Close } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
@@ -48,6 +49,9 @@ const CustomerList = () => {
     const [selectedCustomerIncidences, setSelectedCustomerIncidences] = useState(null);
     const [customerIncidences, setCustomerIncidences] = useState([]);
     const [loadingIncidences, setLoadingIncidences] = useState(false);
+
+    const [incidentToEdit, setIncidentToEdit] = useState(null);
+    const [openEditIncidentDialog, setOpenEditIncidentDialog] = useState(false);
 
     const currentUser = authService.getCurrentUser();
     const navigate = useNavigate();
@@ -1984,6 +1988,165 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
         toolbarExportPrint: 'Imprimir',
     };
 
+    // En el diálogo de incidencias del cliente (openIncidencesDialog)
+
+    // Primero, añade esta nueva función para manejar la impresión de incidencia desde el diálogo
+    const handlePrintIncidentFromDialog = async (incident) => {
+        try {
+            // Mostrar indicador de carga
+            const loadingToast = toast.loading('Preparando informe...');
+            
+            // Obtener reportes asociados a esta incidencia
+            const response = await axios.get(`/reports/reports/?incident=${incident.id}`);
+            const reports = Array.isArray(response.data) ? response.data : [];
+            
+            // Traducir los estados y prioridades para mostrar textos legibles
+            const statusChoices = {
+                'PENDING': 'Pendiente',
+                'IN_PROGRESS': 'En Progreso',
+                'RESOLVED': 'Resuelta',
+                'CLOSED': 'Cerrada'
+            };
+            
+            const priorityChoices = {
+                'LOW': 'Baja',
+                'MEDIUM': 'Media',
+                'HIGH': 'Alta',
+                'CRITICAL': 'Crítica'
+            };
+            
+            // Crear el contenido HTML para el informe
+            const printContent = `
+                <html>
+                    <head>
+                        <title>Informe de Incidencia #${incident.id}</title>
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif;
+                                padding: 20px;
+                                line-height: 1.6;
+                            }
+                            .section {
+                                margin-bottom: 20px;
+                                break-inside: avoid;
+                            }
+                            .section-title {
+                                font-size: 16px;
+                                font-weight: bold;
+                                border-bottom: 1px solid #ccc;
+                                padding-bottom: 5px;
+                                margin-bottom: 10px;
+                            }
+                            .info-row {
+                                margin: 5px 0;
+                            }
+                            .info-label {
+                                font-weight: bold;
+                            }
+                            .report {
+                                border: 1px solid #ccc;
+                                padding: 10px;
+                                margin: 10px 0;
+                                break-inside: avoid;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin: 10px 0;
+                            }
+                            th, td {
+                                border: 1px solid #ccc;
+                                padding: 8px;
+                                text-align: left;
+                            }
+                            @media print {
+                                @page { margin: 2cm; }
+                                .report { page-break-inside: avoid; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Informe de Incidencia #${incident.id}</h1>
+                        
+                        <div class="section">
+                            <div class="section-title">Información de la Incidencia</div>
+                            <div class="info-row"><span class="info-label">Título:</span> ${incident.title}</div>
+                            <div class="info-row"><span class="info-label">Cliente:</span> ${incident.customer_name}</div>
+                            <div class="info-row"><span class="info-label">Estado:</span> ${statusChoices[incident.status] || incident.status}</div>
+                            <div class="info-row"><span class="info-label">Prioridad:</span> ${priorityChoices[incident.priority] || incident.priority}</div>
+                            <div class="info-row"><span class="info-label">Fecha creación:</span> ${new Date(incident.created_at).toLocaleDateString()}</div>
+                            <div class="info-row"><span class="info-label">Descripción:</span> ${incident.description}</div>
+                            ${incident.resolution_notes ? `<div class="info-row"><span class="info-label">Notas de resolución:</span> ${incident.resolution_notes}</div>` : ''}
+                        </div>
+
+                        ${reports.length > 0 ? `
+                            <div class="section">
+                                <div class="section-title">Partes de Trabajo (${reports.length})</div>
+                                ${reports.map(report => `
+                                    <div class="report">
+                                        <div class="info-row"><span class="info-label">Fecha:</span> ${new Date(report.date).toLocaleDateString()}</div>
+                                        <div class="info-row"><span class="info-label">Estado:</span> ${report.status === 'DRAFT' ? 'Borrador' : 'Completado'}</div>
+                                        <div class="info-row"><span class="info-label">Horas trabajadas:</span> ${report.hours_worked || 'No especificadas'}</div>
+                                        <div class="info-row"><span class="info-label">Técnicos:</span> ${report.technicians?.map(tech => tech.technician_name).join(', ') || 'Sin asignar'}</div>
+                                        <div class="info-row"><span class="info-label">Descripción:</span> ${report.description}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<div class="section">No hay partes de trabajo asociados a esta incidencia.</div>'}
+                    </body>
+                </html>
+            `;
+
+            // Cerrar el toast de carga
+            toast.dismiss(loadingToast);
+            
+            // Abrir ventana de impresión
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+            
+        } catch (error) {
+            console.error('Error al imprimir incidencia:', error);
+            toast.error('Error al generar el informe de la incidencia');
+        }
+    };
+
+    // Añadir esta función justo antes o después de handlePrintIncidentFromDialog
+
+const handleEditIncidentFromDialog = (incident) => {
+    setIncidentToEdit(incident);
+    setOpenIncidencesDialog(false);
+    setOpenEditIncidentDialog(true);
+};
+
+const handleSaveEditedIncident = async () => {
+    try {
+        await axios.put(`/incidents/incidents/${incidentToEdit.id}/`, incidentToEdit);
+        toast.success('Incidencia actualizada correctamente');
+        setOpenEditIncidentDialog(false);
+        
+        // Actualizar la lista de incidencias si el diálogo está abierto
+        if (selectedCustomerIncidences) {
+            handleViewIncidences(selectedCustomerIncidences);
+        }
+    } catch (error) {
+        console.error('Error al actualizar la incidencia:', error);
+        toast.error('Error al actualizar la incidencia');
+    }
+};
+
+const handleIncidentInputChange = (e) => {
+    setIncidentToEdit({
+        ...incidentToEdit,
+        [e.target.name]: e.target.value
+    });
+};
+
     return (
         <>
             <Toaster position="top-right" />
@@ -2226,19 +2389,41 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
                                     {
                                         field: 'actions',
                                         headerName: 'Acciones',
-                                        width: 100,
+                                        width: 150,
                                         sortable: false,
                                         renderCell: (params) => (
-                                            <IconButton 
-                                                size="small" 
-                                                onClick={() => {
-                                                    setOpenIncidencesDialog(false);
-                                                    // Navegar a la página de incidencias y seleccionar esta incidencia
-                                                    navigate(`/dashboard/incidents/${params.row.id}`);
-                                                }}
-                                            >
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
+                                            <Box>
+                                                <IconButton 
+                                                    size="small" 
+                                                    title="Ver detalle"
+                                                    onClick={() => {
+                                                        setOpenIncidencesDialog(false);
+                                                        navigate(`/dashboard/incidents/${params.row.id}`);
+                                                    }}
+                                                >
+                                                    <Visibility fontSize="small" />
+                                                </IconButton>
+                                                <IconButton 
+                                                    size="small" 
+                                                    title="Editar"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditIncidentFromDialog(params.row);
+                                                    }}
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                                <IconButton 
+                                                    size="small" 
+                                                    title="Imprimir"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handlePrintIncidentFromDialog(params.row);
+                                                    }}
+                                                >
+                                                    <Print fontSize="small" />
+                                                </IconButton>
+                                            </Box>
                                         )
                                     }
                                 ]}
@@ -2269,6 +2454,90 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
                     <Button onClick={() => setOpenIncidencesDialog(false)}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
+
+            {incidentToEdit && (
+                <Dialog 
+                    open={openEditIncidentDialog} 
+                    onClose={() => setOpenEditIncidentDialog(false)}
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle>
+                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                            <Typography variant="h6">
+                                Editar Incidencia #{incidentToEdit.id}
+                            </Typography>
+                            <IconButton onClick={() => setOpenEditIncidentDialog(false)} size="small">
+                                <Close />
+                            </IconButton>
+                        </Box>
+                    </DialogTitle>
+                    <DialogContent>
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            name="title"
+                            label="Título"
+                            value={incidentToEdit.title}
+                            onChange={handleIncidentInputChange}
+                        />
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            name="description"
+                            label="Descripción"
+                            multiline
+                            rows={4}
+                            value={incidentToEdit.description}
+                            onChange={handleIncidentInputChange}
+                        />
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            select
+                            name="status"
+                            label="Estado"
+                            value={incidentToEdit.status}
+                            onChange={handleIncidentInputChange}
+                        >
+                            <MenuItem value="PENDING">Pendiente</MenuItem>
+                            <MenuItem value="IN_PROGRESS">En Progreso</MenuItem>
+                            <MenuItem value="RESOLVED">Resuelta</MenuItem>
+                            <MenuItem value="CLOSED">Cerrada</MenuItem>
+                        </TextField>
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            select
+                            name="priority"
+                            label="Prioridad"
+                            value={incidentToEdit.priority}
+                            onChange={handleIncidentInputChange}
+                        >
+                            <MenuItem value="LOW">Baja</MenuItem>
+                            <MenuItem value="MEDIUM">Media</MenuItem>
+                            <MenuItem value="HIGH">Alta</MenuItem>
+                            <MenuItem value="CRITICAL">Crítica</MenuItem>
+                        </TextField>
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            name="resolution_notes"
+                            label="Notas de resolución"
+                            multiline
+                            rows={4}
+                            value={incidentToEdit.resolution_notes || ''}
+                            onChange={handleIncidentInputChange}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setOpenEditIncidentDialog(false)}>Cancelar</Button>
+                        <Button onClick={handleSaveEditedIncident} variant="contained">
+                            Guardar Cambios
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            )}
         </>
     );
 };

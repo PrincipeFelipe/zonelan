@@ -28,6 +28,7 @@ const AppRoutes = () => {
                     <Route path="materials/*" element={<MaterialRoutes />} />
                     <Route path="incidents" element={<IncidentList />} />
                     <Route path="incidents/:id" element={<IncidentDetail />} />
+                    <Route path="incidents/:id/edit" element={<IncidentList />} />
                     <Route path="reports/*" element={<ReportRoutes />} />
                     <Route path="tickets/*" element={<TicketRoutes />} />
                 </Route>

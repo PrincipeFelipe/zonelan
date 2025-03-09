@@ -7,7 +7,13 @@ import {
     DialogActions
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { FilterList, Clear, ReceiptOutlined, Close } from '@mui/icons-material';
+import { 
+    FilterList, Receipt, Close, ReceiptOutlined,
+    Search, Clear
+} from '@mui/icons-material';
+import AssignmentIcon from '@mui/icons-material/Assignment'; // Para reportes
+import ReceiptIcon from '@mui/icons-material/Receipt'; // Para tickets
+import DescriptionIcon from '@mui/icons-material/Description'; // Para albaranes
 import { toast } from 'react-hot-toast';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
 
@@ -209,7 +215,7 @@ const MaterialControlList = () => {
         );
     };
 
-    // Añadir función para mostrar referencias a tickets
+    // Función para formatear la referencia al ticket, teniendo en cuenta si está cancelado
     const formatTicketReference = (control) => {
         if (!control.ticket) {
             return '-';
@@ -240,9 +246,145 @@ const MaterialControlList = () => {
                 to={`/dashboard/tickets/${control.ticket}`}
             >
                 Ver ticket #{control.ticket}
-            </Link>
+        </Link>
         );
     };
+
+    // Modificar la definición de columnas
+
+    // 1. Eliminar las columnas individuales de Reporte, Ticket y Albarán
+    // 2. Añadir una nueva columna unificada "Referencia"
+
+    const columns = [
+        { field: 'id', headerName: 'ID', width: 70 },
+        { field: 'timestamp', headerName: 'Fecha', width: 180, 
+            renderCell: (params) => formatDate(params.value) 
+        },
+        { field: 'material_name', headerName: 'Material', flex: 1 },
+        { 
+            field: 'operation', 
+            headerName: 'Operación', 
+            width: 120,
+            renderCell: (params) => (
+                <Chip 
+                    size="small" 
+                    label={params.value === 'ADD' ? 'Entrada' : 'Salida'} 
+                    color={getOperationColor(params.value)}
+                />
+            )
+        },
+        { field: 'quantity', headerName: 'Cantidad', width: 120 },
+        { 
+            field: 'reason', 
+            headerName: 'Motivo', 
+            width: 150,
+            renderCell: (params) => (
+                <Chip 
+                    size="small" 
+                    label={getReasonLabel(params.value)} 
+                    color={getReasonColor(params.value)}
+                />
+            )
+        },
+        // Nueva columna unificada "Referencia"
+        { 
+            field: 'reference', 
+            headerName: 'Referencia', 
+            width: 200,
+            flex: 1,
+            renderCell: (params) => {
+                const row = params.row;
+                
+                // 1. Verificar si hay albarán
+                if (row.invoice) {
+                    return (
+                        <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<Receipt />}
+                            onClick={() => handleViewInvoice(row.invoice)}
+                        >
+                            Ver Albarán
+                        </Button>
+                    );
+                }
+                
+                // 2. Verificar si hay reporte
+                if (row.report) {
+                    // Si el reporte está eliminado
+                    if (row.report_deleted) {
+                        return (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Reporte #{row.report}
+                                </Typography>
+                                <Chip
+                                    label="Eliminado"
+                                    size="small"
+                                    color="default"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.65rem' }}
+                                />
+                            </Box>
+                        );
+                    }
+                    
+                    // Si el reporte existe y no está eliminado
+                    return (
+                        <Link 
+                            component={RouterLink} 
+                            to={`/dashboard/reports/${row.report}`}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                            <AssignmentIcon fontSize="small" />
+                            Reporte #{row.report}
+                        </Link>
+                    );
+                }
+                
+                // 3. Verificar si hay ticket
+                if (row.ticket) {
+                    // Si el ticket está cancelado
+                    if (row.ticket_canceled) {
+                        return (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Ticket #{row.ticket}
+                                </Typography>
+                                <Chip
+                                    label="Cancelado"
+                                    size="small"
+                                    color="error"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.65rem' }}
+                                />
+                            </Box>
+                        );
+                    }
+                    
+                    // Si el ticket existe y no está cancelado
+                    return (
+                        <Link 
+                            component={RouterLink} 
+                            to={`/dashboard/tickets/${row.ticket}`}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                            <ReceiptIcon fontSize="small" />
+                            Ticket #{row.ticket}
+                        </Link>
+                    );
+                }
+                
+                // Si no hay referencia
+                return '-';
+            }
+        },
+        { 
+            field: 'user_username', 
+            headerName: 'Usuario', 
+            width: 150 
+        }
+    ];
 
     return (
         <Box sx={{ p: 2 }}>
@@ -373,21 +515,19 @@ const MaterialControlList = () => {
                                 <TableCell>Operación</TableCell>
                                 <TableCell>Motivo</TableCell>
                                 <TableCell>Usuario</TableCell>
-                                <TableCell>Reporte</TableCell>
-                                <TableCell>Ticket</TableCell>
-                                <TableCell>Albarán</TableCell>
+                                <TableCell>Referencia</TableCell> {/* Columna unificada */}
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} align="center">
+                                    <TableCell colSpan={7} align="center">
                                         Cargando...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredControls.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} align="center">
+                                    <TableCell colSpan={7} align="center">
                                         No hay registros disponibles
                                     </TableCell>
                                 </TableRow>
@@ -397,7 +537,7 @@ const MaterialControlList = () => {
                                     .map((control) => (
                                         <TableRow key={control.id}>
                                             <TableCell>
-                                                {formatDate(control.date)}
+                                                {formatDate(control.timestamp)}
                                             </TableCell>
                                             <TableCell>{control.material_name}</TableCell>
                                             <TableCell>{control.quantity}</TableCell>
@@ -415,20 +555,66 @@ const MaterialControlList = () => {
                                                     size="small"
                                                 />
                                             </TableCell>
-                                            <TableCell>{control.user_name}</TableCell>
+                                            <TableCell>{control.user_name || control.user_username}</TableCell>
                                             <TableCell>
-                                                {formatDeletedReportReference(control)}
-                                            </TableCell>
-                                            <TableCell>{formatTicketReference(control)}</TableCell>
-                                            <TableCell>
+                                                {/* Renderizado de la referencia unificada */}
                                                 {control.invoice_url ? (
-                                                    <IconButton 
-                                                        color="primary" 
+                                                    <Button
                                                         size="small"
+                                                        variant="text"
+                                                        startIcon={<ReceiptOutlined />}
                                                         onClick={() => handleViewInvoice(control.invoice_url)}
                                                     >
-                                                        <ReceiptOutlined />
-                                                    </IconButton>
+                                                        Ver Albarán
+                                                    </Button>
+                                                ) : control.report ? (
+                                                    control.report_deleted ? (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Reporte #{control.report}
+                                                            </Typography>
+                                                            <Chip
+                                                                label="Eliminado"
+                                                                size="small"
+                                                                color="default"
+                                                                variant="outlined"
+                                                                sx={{ fontSize: '0.65rem' }}
+                                                            />
+                                                        </Box>
+                                                    ) : (
+                                                        <Link 
+                                                            component={RouterLink} 
+                                                            to={`/dashboard/reports/${control.report}`}
+                                                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                                                        >
+                                                            <AssignmentIcon fontSize="small" />
+                                                            Reporte #{control.report}
+                                                        </Link>
+                                                    )
+                                                ) : control.ticket ? (
+                                                    control.ticket_canceled ? (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Ticket #{control.ticket}
+                                                            </Typography>
+                                                            <Chip
+                                                                label="Cancelado"
+                                                                size="small"
+                                                                color="error"
+                                                                variant="outlined"
+                                                                sx={{ fontSize: '0.65rem' }}
+                                                            />
+                                                        </Box>
+                                                    ) : (
+                                                        <Link 
+                                                            component={RouterLink} 
+                                                            to={`/dashboard/tickets/${control.ticket}`}
+                                                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                                                        >
+                                                            <ReceiptIcon fontSize="small" />
+                                                            Ticket #{control.ticket}
+                                                        </Link>
+                                                    )
                                                 ) : (
                                                     '-'
                                                 )}

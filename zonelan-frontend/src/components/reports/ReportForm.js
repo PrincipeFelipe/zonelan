@@ -68,8 +68,16 @@ const ReportForm = () => {
         fetchIncidents();
         fetchTechnicians();
         fetchMaterials();
+        
+        // Obtener parámetros de URL (para cuando se llama desde otra vista)
+        const params = new URLSearchParams(location.search);
+        const incidentId = params.get('incident');
+        
         if (editMode) {
             fetchReport();
+        } else if (incidentId) {
+            // Si hay un ID de incidencia en los parámetros, pre-seleccionarlo
+            fetchIncidentDetails(incidentId);
         }
     }, [id]);
 
@@ -114,6 +122,31 @@ const ReportForm = () => {
         } catch (error) {
             console.error('Error fetching report:', error);
             toast.error('Error al cargar el parte');
+        }
+    };
+
+    const fetchIncidentDetails = async (incidentId) => {
+        try {
+            const response = await axios.get(`/incidents/incidents/${incidentId}/`);
+            const incident = response.data;
+            
+            if (incident) {
+                // Pre-llenar el formulario con la incidencia seleccionada
+                setReport(prev => ({
+                    ...prev,
+                    incident: incident.id,
+                    title: `Parte para incidencia #${incident.id}`,
+                    // Puedes pre-llenar otros campos según necesites
+                }));
+                
+                // También podrías cargar el cliente asociado
+                if (incident.customer) {
+                    // Opcionalmente, cargar datos del cliente
+                }
+            }
+        } catch (error) {
+            console.error('Error al cargar detalles de incidencia:', error);
+            toast.error('Error al cargar información de la incidencia');
         }
     };
 
