@@ -7,13 +7,16 @@ from rest_framework import filters
 from django.db.models import Q
 from .models import Incident
 from .serializers import IncidentSerializer
+from django_filters.rest_framework import DjangoFilterBackend
 
 class IncidentViewSet(viewsets.ModelViewSet):
-    queryset = Incident.objects.all()
+    queryset = Incident.objects.all().order_by('-created_at')
     serializer_class = IncidentSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['title', 'description']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['customer', 'status', 'priority']  # Añadir 'customer' aquí
+    search_fields = ['title', 'description', 'customer__name', 'customer__business_name', 'customer__tax_id']
+    ordering_fields = ['created_at', 'status', 'priority']
     
     def get_queryset(self):
         queryset = Incident.objects.all()

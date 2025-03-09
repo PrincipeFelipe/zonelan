@@ -15,9 +15,11 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    Box
+    Box,
+    CircularProgress,
+    Chip
 } from '@mui/material';
-import { Edit, Delete, Add, Print } from '@mui/icons-material';
+import { Edit, Delete, Add, Print, Visibility, AssessmentOutlined, Close } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
@@ -25,6 +27,7 @@ import authService from '../../services/authService';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 
 const CustomerList = () => {
     const [customers, setCustomers] = useState([]);
@@ -33,13 +36,21 @@ const CustomerList = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [newCustomer, setNewCustomer] = useState({
         name: '',
+        business_name: '',  // Nuevo campo
+        tax_id: '',         // Nuevo campo
         address: '',
         phone: '',
         email: '',
         contact_person: ''
     });
 
+    const [openIncidencesDialog, setOpenIncidencesDialog] = useState(false);
+    const [selectedCustomerIncidences, setSelectedCustomerIncidences] = useState(null);
+    const [customerIncidences, setCustomerIncidences] = useState([]);
+    const [loadingIncidences, setLoadingIncidences] = useState(false);
+
     const currentUser = authService.getCurrentUser();
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchCustomers();
@@ -68,6 +79,8 @@ const CustomerList = () => {
             setSelectedCustomer(null);
             setNewCustomer({
                 name: '',
+                business_name: '',  // Nuevo campo
+                tax_id: '',         // Nuevo campo
                 address: '',
                 phone: '',
                 email: '',
@@ -104,7 +117,9 @@ const CustomerList = () => {
 
             const dataToSend = {
                 ...newCustomer,
-                contact_person: newCustomer.contact_person || null // Aseguramos que se envíe null si está vacío
+                business_name: newCustomer.business_name || null,  // Asegurar que se envía null si está vacío
+                tax_id: newCustomer.tax_id || null,                // Asegurar que se envía null si está vacío
+                contact_person: newCustomer.contact_person || null // Asegurar que se envía null si está vacío
             };
 
             if (editMode) {
@@ -810,9 +825,25 @@ const CustomerList = () => {
                             }
                         }
                     </style>
+                    <style>
+                        .customer-business-name {
+                            text-align: center;
+                            font-size: 16px;
+                            margin-bottom: 5px;
+                            color: #555;
+                        }
+                        .customer-tax-id {
+                            text-align: center;
+                            font-size: 14px;
+                            margin-bottom: 15px;
+                            color: #666;
+                        }
+                    </style>
                 </head>
                 <body>
                     <h1>Informe de Cliente: ${customer.name}</h1>
+                    ${customer.business_name ? `<div class="customer-business-name">Nombre Comercial: ${customer.business_name}</div>` : ''}
+                    ${customer.tax_id ? `<div class="customer-tax-id">CIF/NIF: ${customer.tax_id}</div>` : ''}
                     <div class="date-range">Período: ${formattedStartDate} - ${formattedEndDate}</div>
                     
                     <div class="section">
@@ -1457,6 +1488,8 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
             </head>
             <body>
                 <h1>Informe de Cliente: ${customer.name}</h1>
+                ${customer.business_name ? `<div class="customer-business-name">Nombre Comercial: ${customer.business_name}</div>` : ''}
+                ${customer.tax_id ? `<div class="customer-tax-id">CIF/NIF: ${customer.tax_id}</div>` : ''}
                 <div class="date-range">Período: ${formattedStartDate} - ${formattedEndDate}</div>
                 
                 <div class="summary-section first-page">
@@ -1828,9 +1861,35 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
     `;
 };
 
+    const handleViewIncidences = async (customer) => {
+        try {
+            setSelectedCustomerIncidences(customer);
+            setLoadingIncidences(true);
+            setOpenIncidencesDialog(true);
+            
+            // Obtener todas las incidencias del cliente
+            const response = await axios.get(`/incidents/incidents/?customer=${customer.id}`);
+            
+            if (Array.isArray(response.data)) {
+                setCustomerIncidences(response.data);
+            } else {
+                setCustomerIncidences([]);
+                console.error('Formato de respuesta inesperado:', response.data);
+            }
+        } catch (error) {
+            console.error('Error al cargar incidencias:', error);
+            toast.error('Error al cargar las incidencias del cliente');
+            setCustomerIncidences([]);
+        } finally {
+            setLoadingIncidences(false);
+        }
+    };
+
     const columns = [
         { field: 'id', headerName: 'ID', width: 70 },
         { field: 'name', headerName: 'Nombre', flex: 1 },
+        { field: 'business_name', headerName: 'Nombre Comercial', flex: 1 },
+        { field: 'tax_id', headerName: 'CIF/NIF', flex: 1 },
         { field: 'address', headerName: 'Dirección', flex: 1 },
         { field: 'phone', headerName: 'Teléfono', flex: 1 },
         { field: 'email', headerName: 'Email', flex: 1 },
@@ -1838,7 +1897,7 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
         {
             field: 'actions',
             headerName: 'Acciones',
-            width: 180,
+            width: 200,
             sortable: false,
             filterable: false,
             renderCell: (params) => (
@@ -1864,6 +1923,16 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
                         color="primary"
                     >
                         <Print />
+                    </IconButton>
+                    <IconButton
+                        size="small"
+                        title="Consultar incidencias"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewIncidences(params.row);
+                        }}
+                    >
+                        <AssessmentOutlined fontSize="small" />
                     </IconButton>
                 </Box>
             ),
@@ -1972,39 +2041,60 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
                         fullWidth
                         margin="normal"
                         name="name"
-                        label="Nombre"
+                        label="Nombre *"
                         value={newCustomer.name}
+                        onChange={handleInputChange}
+                        required
+                    />
+                    <TextField
+                        fullWidth
+                        margin="normal"
+                        name="business_name"
+                        label="Nombre Comercial"
+                        value={newCustomer.business_name || ''}
+                        onChange={handleInputChange}
+                        helperText="Nombre comercial o marca"
+                    />
+                    <TextField
+                        fullWidth
+                        margin="normal"
+                        name="tax_id"
+                        label="CIF/NIF"
+                        value={newCustomer.tax_id || ''}
                         onChange={handleInputChange}
                     />
                     <TextField
                         fullWidth
                         margin="normal"
                         name="address"
-                        label="Dirección"
+                        label="Dirección *"
                         value={newCustomer.address}
                         onChange={handleInputChange}
+                        required
                     />
                     <TextField
                         fullWidth
                         margin="normal"
                         name="phone"
-                        label="Teléfono"
+                        label="Teléfono *"
                         value={newCustomer.phone}
                         onChange={handleInputChange}
+                        required
                     />
                     <TextField
                         fullWidth
                         margin="normal"
                         name="email"
-                        label="Email"
+                        label="Email *"
                         value={newCustomer.email}
                         onChange={handleInputChange}
+                        required
                     />
                     <TextField
                         fullWidth
                         margin="normal"
                         name="contact_person"
-                        label="Persona de Contacto (Opcional)"
+                        label="Persona de Contacto"
                         value={newCustomer.contact_person || ''}
                         onChange={handleInputChange}
                         helperText="Este campo es opcional"
@@ -2015,6 +2105,168 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
                     <Button onClick={handleSubmit} variant="contained">
                         {editMode ? 'Guardar Cambios' : 'Crear'}
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog 
+                open={openIncidencesDialog} 
+                onClose={() => setOpenIncidencesDialog(false)}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Typography variant="h6">
+                            Incidencias de {selectedCustomerIncidences?.name}
+                            {selectedCustomerIncidences?.business_name && ` (${selectedCustomerIncidences.business_name})`}
+                        </Typography>
+                        <IconButton onClick={() => setOpenIncidencesDialog(false)} size="small">
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {loadingIncidences ? (
+                        <Box display="flex" justifyContent="center" mt={3} mb={3}>
+                            <CircularProgress />
+                        </Box>
+                    ) : customerIncidences.length > 0 ? (
+                        <Box sx={{ height: 400, width: '100%' }}>
+                            <DataGrid
+                                rows={customerIncidences}
+                                columns={[
+                                    { field: 'id', headerName: 'ID', width: 70 },
+                                    { field: 'title', headerName: 'Título', flex: 1 },
+                                    { 
+                                        field: 'status', 
+                                        headerName: 'Estado', 
+                                        width: 130,
+                                        renderCell: (params) => {
+                                            let label = '';
+                                            let color = '';
+                                            
+                                            switch (params.value) {
+                                                case 'PENDING':
+                                                    label = 'Pendiente';
+                                                    color = 'warning';
+                                                    break;
+                                                case 'IN_PROGRESS':
+                                                    label = 'En Progreso';
+                                                    color = 'info';
+                                                    break;
+                                                case 'RESOLVED':
+                                                    label = 'Resuelta';
+                                                    color = 'success';
+                                                    break;
+                                                case 'CLOSED':
+                                                    label = 'Cerrada';
+                                                    color = 'default';
+                                                    break;
+                                                default:
+                                                    label = params.value;
+                                                    color = 'default';
+                                            }
+                                            
+                                            return <Chip size="small" label={label} color={color} />;
+                                        }
+                                    },
+                                    { 
+                                        field: 'priority', 
+                                        headerName: 'Prioridad', 
+                                        width: 120,
+                                        renderCell: (params) => {
+                                            let label = '';
+                                            let color = '';
+                                            
+                                            switch (params.value) {
+                                                case 'LOW':
+                                                    label = 'Baja';
+                                                    color = 'success';
+                                                    break;
+                                                case 'MEDIUM':
+                                                    label = 'Media';
+                                                    color = 'info';
+                                                    break;
+                                                case 'HIGH':
+                                                    label = 'Alta';
+                                                    color = 'warning';
+                                                    break;
+                                                case 'CRITICAL':
+                                                    label = 'Crítica';
+                                                    color = 'error';
+                                                    break;
+                                                default:
+                                                    label = params.value;
+                                                    color = 'default';
+                                            }
+                                            
+                                            return <Chip size="small" label={label} color={color} />;
+                                        }
+                                    },
+                                    { 
+                                        field: 'created_at', 
+                                        headerName: 'Fecha', 
+                                        width: 120,
+                                        renderCell: (params) => {
+                                            if (!params.value) return '-';
+                                            
+                                            try {
+                                                const date = new Date(params.value);
+                                                return date.toLocaleDateString();
+                                            } catch (error) {
+                                                return 'Fecha inválida';
+                                            }
+                                        }
+                                    },
+                                    { 
+                                        field: 'description', 
+                                        headerName: 'Descripción', 
+                                        flex: 1 
+                                    },
+                                    {
+                                        field: 'actions',
+                                        headerName: 'Acciones',
+                                        width: 100,
+                                        sortable: false,
+                                        renderCell: (params) => (
+                                            <IconButton 
+                                                size="small" 
+                                                onClick={() => {
+                                                    setOpenIncidencesDialog(false);
+                                                    // Navegar a la página de incidencias y seleccionar esta incidencia
+                                                    navigate(`/dashboard/incidents/${params.row.id}`);
+                                                }}
+                                            >
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
+                                        )
+                                    }
+                                ]}
+                                pageSize={5}
+                                rowsPerPageOptions={[5, 10, 25]}
+                                disableSelectionOnClick
+                                getRowId={(row) => row.id}
+                                localeText={{
+                                    noRowsLabel: 'No hay incidencias registradas',
+                                    // Resto de traducciones...
+                                }}
+                                slots={{ toolbar: GridToolbar }}
+                                slotProps={{
+                                    toolbar: {
+                                        showQuickFilter: true,
+                                        quickFilterProps: { debounceMs: 500 },
+                                    },
+                                }}
+                            />
+                        </Box>
+                    ) : (
+                        <Typography variant="body1" align="center" py={3}>
+                            No hay incidencias registradas para este cliente.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenIncidencesDialog(false)}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
         </>

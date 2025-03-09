@@ -2,7 +2,8 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, status, filters
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -16,14 +17,33 @@ from .serializers import (
 )
 from apps.materials.models import Material, MaterialControl
 import logging
+import traceback
+import sys
 
 logger = logging.getLogger(__name__)
+
+# Crear un permiso personalizado para restringir la eliminación a superusuarios
+class IsSuperUserOrReadOnly(permissions.BasePermission):
+    """
+    Permite eliminar objetos solo a superusuarios.
+    """
+    def has_permission(self, request, view):
+        # Siempre permitir GET, HEAD u OPTIONS
+        if request.method in permissions.SAFE_METHODS:
+            return True
+            
+        # Permitir operaciones de escritura solo a superusuarios para DELETE
+        if request.method == 'DELETE':
+            return request.user and request.user.is_superuser
+            
+        # Para otros métodos como POST, PUT, etc.
+        return request.user and request.user.is_authenticated
 
 class TicketViewSet(viewsets.ModelViewSet):
     """API para gestionar tickets de venta"""
     queryset = Ticket.objects.all().order_by('-created_at')
     serializer_class = TicketSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'payment_method', 'customer']
@@ -31,44 +51,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'total_amount', 'status']
     
     def get_queryset(self):
-        """Filtrar tickets por cliente, estado, fechas, etc."""
-        queryset = super().get_queryset()
-        
-        # Filtros adicionales
-        date_from = self.request.query_params.get('date_from')
-        date_to = self.request.query_params.get('date_to')
-        amount_min = self.request.query_params.get('amount_min')
-        amount_max = self.request.query_params.get('amount_max')
-        
-        if date_from:
-            queryset = queryset.filter(created_at__gte=date_from)
-        if date_to:
-            queryset = queryset.filter(created_at__lte=date_to)
-        if amount_min:
-            queryset = queryset.filter(total_amount__gte=amount_min)
-        if amount_max:
-            queryset = queryset.filter(total_amount__lte=amount_max)
-        
-        # Filtrar por cliente
-        customer_id = self.request.query_params.get('customer', None)
-        if customer_id:
-            queryset = queryset.filter(customer_id=customer_id)
-        
-        # Filtrar por estado
-        status_filter = self.request.query_params.get('status', None)
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        # Filtrar por fechas
-        start_date = self.request.query_params.get('start_date', None)
-        end_date = self.request.query_params.get('end_date', None)
-        if start_date and end_date:
-            queryset = queryset.filter(
-                created_at__date__gte=start_date,
-                created_at__date__lte=end_date
-            )
-        
-        return queryset
+        return Ticket.objects.filter(is_deleted=False).order_by('-created_at')
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -231,39 +214,34 @@ class TicketViewSet(viewsets.ModelViewSet):
     
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
-        """Marcar como eliminado en lugar de eliminar realmente"""
+        """Eliminar un ticket (solo superusuarios)"""
         ticket = self.get_object()
         
-        # No permitir eliminar tickets pagados
-        if ticket.status == 'PAID':
-            return Response({
-                'detail': 'No se puede eliminar un ticket pagado. Cancélelo primero.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Verificar permisos
+        if not request.user.is_superuser and not getattr(request.user, 'type', '') != 'SuperAdmin':
+            return Response(
+                {"detail": "Solo los superusuarios pueden eliminar tickets."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
-        # Devolver el stock si el ticket está pendiente
-        if ticket.status == 'PENDING':
-            for item in ticket.items.all():
-                if item.material:
-                    # Aumentar el stock
-                    item.material.quantity += item.quantity
-                    item.material.save()
-                    
-                    # Registrar en control de materiales
-                    MaterialControl.objects.create(
-                        user=request.user,
-                        material=item.material,
-                        quantity=item.quantity,
-                        operation='ADD',
-                        reason='ELIMINACION_TICKET',
-                        ticket=ticket
-                    )
-        
-        # Marcar como eliminado
-        ticket.is_deleted = True
-        ticket.save()
-        
-        return Response({'detail': 'Ticket eliminado correctamente.'}, 
-                      status=status.HTTP_204_NO_CONTENT)
+        try:
+            # Marcar como eliminado en lugar de eliminar físicamente
+            ticket.is_deleted = True
+            ticket.deleted_at = timezone.now()
+            ticket.save(update_fields=['is_deleted', 'deleted_at'])
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            # Capturar y registrar detalles del error
+            exc_info = sys.exc_info()
+            error_details = traceback.format_exc()
+            logger.error(f"Error al eliminar ticket {ticket.id}: {str(e)}")
+            logger.error(error_details)
+            
+            return Response(
+                {"detail": f"Error al eliminar el ticket: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['post'], url_path='items')
     @transaction.atomic

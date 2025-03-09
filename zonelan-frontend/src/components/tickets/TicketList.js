@@ -7,7 +7,7 @@ import {
     IconButton, Tooltip, CircularProgress
 } from '@mui/material';
 import {
-    Add, Search, Visibility, Print, CreditCard, Cancel
+    Add, Search, Visibility, Print, CreditCard, Cancel, Delete
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axiosConfig';
@@ -18,6 +18,7 @@ import { useTickets } from '../../hooks/useTickets';
 import { formatCurrency } from '../../utils/helpers';
 import NewTicketDialog from './NewTicketDialog';
 import Swal from 'sweetalert2';
+import { useAuth } from '../../hooks/useAuth'; // Importar hook de autenticación
 
 const TicketList = () => {
     const [tickets, setTickets] = useState([]);
@@ -29,7 +30,9 @@ const TicketList = () => {
     const [statusFilter, setStatusFilter] = useState('');
     const [newTicketDialogOpen, setNewTicketDialogOpen] = useState(false);
     const navigate = useNavigate();
-    const { printTicket, markAsPaid, cancelTicket } = useTickets();
+    const { printTicket, markAsPaid, cancelTicket, deleteTicket } = useTickets(); // Añadir deleteTicket
+    const { user } = useAuth(); // Obtener usuario actual
+    const isSuperuser = user && (user.is_superuser || user.type === 'SuperAdmin'); // Verificar si es superusuario
 
     useEffect(() => {
         fetchTickets();
@@ -38,36 +41,14 @@ const TicketList = () => {
     const fetchTickets = async () => {
         try {
             setLoading(true);
-            const params = {};
-
-            if (searchTerm) {
-                params.search = searchTerm;
-            }
-
-            if (statusFilter) {
-                params.status = statusFilter;
-            }
-
-            console.log('Fetching tickets with params:', params);
-            const response = await axios.get('/tickets/tickets/', { params });
-            console.log('Tickets response:', response.data);
-            
-            // Manejar diferentes formatos de respuesta de la API
-            if (Array.isArray(response.data)) {
-                setTickets(response.data);
-                setTotalCount(response.data.length);
-            } else if (response.data?.results) {
-                setTickets(response.data.results);
-                setTotalCount(response.data.count || 0);
-            } else {
-                setTickets([]);
-                setTotalCount(0);
-            }
+            const response = await axios.get('/tickets/tickets/');
+            setTickets(response.data.results || response.data);
+            setTotalCount(response.data.count || response.data.length);
         } catch (error) {
             console.error('Error al cargar tickets:', error);
+            toast.error('Error al cargar la lista de tickets', { position: 'top-right' });
             setTickets([]);
             setTotalCount(0);
-            toast.error('Error al cargar la lista de tickets');
         } finally {
             setLoading(false);
         }
@@ -201,6 +182,30 @@ const TicketList = () => {
         } catch (error) {
             console.error('Error al cancelar ticket:', error);
             toast.error('Error al cancelar el ticket');
+        }
+    };
+
+    const handleDeleteTicket = async (ticket) => {
+        try {
+            const result = await Swal.fire({
+                title: '¿Eliminar ticket?',
+                text: `¿Está seguro de eliminar permanentemente el ticket ${ticket.ticket_number || `#${ticket.id}`}? Esta acción no se puede deshacer.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                await deleteTicket(ticket.id);
+                fetchTickets(); // Refrescar la lista
+                toast.success('Ticket eliminado correctamente', { position: 'top-right' });
+            }
+        } catch (error) {
+            console.error('Error al eliminar ticket:', error);
+            toast.error('Error al eliminar el ticket', { position: 'top-right' });
         }
     };
 
@@ -355,6 +360,21 @@ const TicketList = () => {
                                                         onClick={() => handlePrintTicket(ticket.id)}
                                                     >
                                                         <Print fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+
+                                            {isSuperuser && (
+                                                <Tooltip title="Eliminar ticket">
+                                                    <IconButton 
+                                                        size="small" 
+                                                        color="error"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteTicket(ticket);
+                                                        }}
+                                                    >
+                                                        <Delete fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
                                             )}

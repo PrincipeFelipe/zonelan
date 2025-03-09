@@ -18,7 +18,8 @@ import {
     ImageListItemBar,
     Dialog,
     DialogContent,
-    IconButton as MuiIconButton
+    IconButton as MuiIconButton,
+    Autocomplete
 } from '@mui/material';
 import { Add, Delete, Save, ArrowBack, CloudUpload, Close, NavigateNext, NavigateBefore, DeleteOutline, Restore as RestoreIcon } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -47,7 +48,11 @@ const ReportForm = () => {
     const [incidents, setIncidents] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [materials, setMaterials] = useState([]);
-    const [selectedMaterial, setSelectedMaterial] = useState({ material: '', quantity: 1 });
+    const [selectedMaterial, setSelectedMaterial] = useState({ 
+        material: '', 
+        quantity: 1,
+        materialObject: null // Para almacenar el objeto material completo
+    });
     const [selectedTechnician, setSelectedTechnician] = useState('');
     const [beforeImages, setBeforeImages] = useState([]);
     const [afterImages, setAfterImages] = useState([]);
@@ -174,12 +179,28 @@ const ReportForm = () => {
             return;
         }
 
+        // Verificar stock disponible
+        const materialObject = materials.find(m => m.id === selectedMaterial.material);
+        if (materialObject && selectedMaterial.quantity > materialObject.quantity) {
+            toast.error(`Stock insuficiente. Disponible: ${materialObject.quantity}`);
+            return;
+        }
+
         // Actualizar el estado con el nuevo material
         setReport(prev => ({
             ...prev,
-            materials_used: [...prev.materials_used, selectedMaterial]
+            materials_used: [...prev.materials_used, {
+                material: selectedMaterial.material,
+                quantity: selectedMaterial.quantity
+            }]
         }));
-        setSelectedMaterial({ material: '', quantity: 1 });
+        
+        // Resetear el selector de materiales
+        setSelectedMaterial({ 
+            material: '', 
+            quantity: 1,
+            materialObject: null
+        });
     };
 
     const handleRemoveMaterial = (materialId) => {
@@ -511,6 +532,10 @@ const ReportForm = () => {
         }
     };
 
+    // Verificar si hay materiales con stock disponible
+    const materialsWithStock = materials.filter(m => m.quantity > 0);
+    const noMaterialsAvailable = materialsWithStock.length === 0;
+
     return (
         <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
@@ -670,41 +695,48 @@ const ReportForm = () => {
                         </Typography>
                         <Divider sx={{ mb: 2 }} />
 
-                        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                            <TextField
-                                sx={{ flexGrow: 1 }}
-                                select
-                                label="Material"
-                                value={selectedMaterial.material}
-                                onChange={(e) => setSelectedMaterial({
-                                    ...selectedMaterial,
-                                    material: e.target.value
-                                })}
-                            >
-                                {materials.map((material) => (
-                                    <MenuItem key={material.id} value={material.id}>
-                                        {material.name} (Stock: {material.quantity})
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            <TextField
-                                sx={{ width: '100px' }}
-                                type="number"
-                                label="Cantidad"
-                                value={selectedMaterial.quantity}
-                                onChange={(e) => setSelectedMaterial({
-                                    ...selectedMaterial,
-                                    quantity: parseInt(e.target.value) || 0
-                                })}
-                            />
-                            <Button
-                                variant="contained"
-                                startIcon={<Add />}
-                                onClick={handleAddMaterial}
-                            >
-                                Añadir
-                            </Button>
-                        </Box>
+                        {noMaterialsAvailable ? (
+                            <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                No hay materiales disponibles en stock.
+                            </Typography>
+                        ) : (
+                            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                                <Autocomplete
+                                    sx={{ flexGrow: 1 }}
+                                    options={materialsWithStock}
+                                    getOptionLabel={(option) => `${option.name} (Stock: ${option.quantity})`}
+                                    renderInput={(params) => <TextField {...params} label="Buscar material" />}
+                                    onChange={(event, newValue) => {
+                                        setSelectedMaterial({
+                                            material: newValue ? newValue.id : '',
+                                            quantity: 1,
+                                            materialObject: newValue
+                                        });
+                                    }}
+                                    value={selectedMaterial.materialObject}
+                                    isOptionEqualToValue={(option, value) => option && value && option.id === value.id}
+                                />
+                                <TextField
+                                    sx={{ width: '100px' }}
+                                    type="number"
+                                    label="Cantidad"
+                                    value={selectedMaterial.quantity}
+                                    onChange={(e) => setSelectedMaterial({
+                                        ...selectedMaterial,
+                                        quantity: parseInt(e.target.value) || 0
+                                    })}
+                                    inputProps={{ min: 1, max: selectedMaterial.materialObject?.quantity || 9999 }}
+                                />
+                                <Button
+                                    variant="contained"
+                                    startIcon={<Add />}
+                                    onClick={handleAddMaterial}
+                                    disabled={!selectedMaterial.material || selectedMaterial.quantity < 1}
+                                >
+                                    Añadir
+                                </Button>
+                            </Box>
+                        )}
 
                         <List>
                             {report.materials_used.map((material) => (

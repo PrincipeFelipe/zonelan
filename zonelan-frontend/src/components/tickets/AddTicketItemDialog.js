@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     TextField, FormControl, InputLabel, Select, MenuItem,
-    Grid, InputAdornment, CircularProgress, Box, Typography
+    Grid, InputAdornment, CircularProgress, Box, Typography,
+    Autocomplete
 } from '@mui/material';
 import { toast } from 'react-hot-toast';
 import axios from '../../utils/axiosConfig';
@@ -80,18 +81,23 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
         }));
     };
 
-    const handleMaterialChange = (e) => {
-        const materialId = e.target.value;
-        const material = materials.find(m => m.id === materialId);
-        
-        setFormData(prev => ({
-            ...prev,
-            material: materialId,
-            // Inicializamos con el precio actual del material
-            unit_price: material ? material.price : 0
-        }));
-        
-        setSelectedMaterial(material);
+    const handleMaterialChange = (event, newValue) => {
+        if (newValue) {
+            setSelectedMaterial(newValue);
+            setFormData(prev => ({
+                ...prev,
+                material: newValue.id,
+                // Inicializamos con el precio actual del material
+                unit_price: newValue.price
+            }));
+        } else {
+            setSelectedMaterial(null);
+            setFormData(prev => ({
+                ...prev,
+                material: '',
+                unit_price: 0
+            }));
+        }
     };
 
     const handleSubmit = async () => {
@@ -139,35 +145,44 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
         return total;
     };
 
+    // Verificar si hay materiales disponibles
+    const materialsWithStock = materials.filter(m => m.quantity > 0);
+    const noMaterialsAvailable = materialsWithStock.length === 0;
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>Añadir Producto</DialogTitle>
             <DialogContent>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                     <Grid item xs={12}>
-                        <FormControl fullWidth disabled={materialLoading}>
-                            <InputLabel id="material-label">Material</InputLabel>
-                            <Select
-                                labelId="material-label"
-                                name="material"
-                                value={formData.material}
+                        {noMaterialsAvailable ? (
+                            <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                No hay materiales disponibles en stock.
+                            </Typography>
+                        ) : materialLoading ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={20} />
+                                <Typography variant="body2">Cargando materiales...</Typography>
+                            </Box>
+                        ) : (
+                            <Autocomplete
+                                fullWidth
+                                options={materialsWithStock}
+                                getOptionLabel={(option) => `${option.name} (Stock: ${option.quantity}) - ${formatCurrency(option.price)}`}
+                                renderInput={(params) => <TextField {...params} label="Buscar material" />}
                                 onChange={handleMaterialChange}
-                                label="Material"
-                                startAdornment={
-                                    materialLoading ? (
-                                        <InputAdornment position="start">
-                                            <CircularProgress size={20} />
-                                        </InputAdornment>
-                                    ) : null
-                                }
-                            >
-                                {materials.map(material => (
-                                    <MenuItem key={material.id} value={material.id}>
-                                        {material.name} - Stock: {material.quantity} - {formatCurrency(material.price)}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                value={selectedMaterial}
+                                isOptionEqualToValue={(option, value) => option && value && option.id === value.id}
+                                filterOptions={(options, state) => {
+                                    const inputValue = state.inputValue.toLowerCase().trim();
+                                    if (inputValue === '') return options;
+                                    
+                                    return options.filter(option => 
+                                        option.name.toLowerCase().includes(inputValue)
+                                    );
+                                }}
+                            />
+                        )}
                     </Grid>
 
                     <Grid item xs={12} sm={6}>
@@ -179,8 +194,13 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
                             value={formData.quantity}
                             onChange={handleInputChange}
                             InputProps={{
-                                inputProps: { min: 1, max: selectedMaterial?.quantity || 999 }
+                                inputProps: { 
+                                    min: 1, 
+                                    max: selectedMaterial?.quantity || 999,
+                                    step: 1
+                                }
                             }}
+                            disabled={!selectedMaterial}
                         />
                     </Grid>
 
@@ -193,9 +213,10 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
                             value={formData.discount_percentage}
                             onChange={handleInputChange}
                             InputProps={{
-                                inputProps: { min: 0, max: 100 },
+                                inputProps: { min: 0, max: 100, step: 1 },
                                 endAdornment: <InputAdornment position="end">%</InputAdornment>,
                             }}
+                            disabled={!selectedMaterial}
                         />
                     </Grid>
 
@@ -259,7 +280,7 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
                     onClick={handleSubmit} 
                     variant="contained" 
                     color="primary" 
-                    disabled={loading || !formData.material || formData.quantity <= 0}
+                    disabled={loading || !selectedMaterial || formData.quantity <= 0}
                 >
                     {loading ? <CircularProgress size={24} /> : "Añadir"}
                 </Button>

@@ -60,6 +60,8 @@ class Ticket(models.Model):
         null=True,
         blank=True
     )
+    is_deleted = models.BooleanField(default=False, verbose_name="Eliminado")
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de eliminación")
     
     def save(self, *args, **kwargs):
         if not self.ticket_number:

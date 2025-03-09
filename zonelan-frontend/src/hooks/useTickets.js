@@ -359,6 +359,28 @@ export const useTickets = () => {
         });
     };
 
+    // Añadir función para eliminar ticket (solo superuser)
+    const deleteTicket = async (id) => {
+        try {
+            setLoading(true);
+            toast.loading('Eliminando ticket...', { id: 'delete-ticket' });
+            await axios.delete(`/tickets/tickets/${id}/`);
+            toast.dismiss('delete-ticket');
+            toast.success('Ticket eliminado correctamente', { position: 'top-right', id: 'delete-ticket-success' });
+            return true;
+        } catch (error) {
+            console.error('Error al eliminar ticket:', error);
+            toast.dismiss('delete-ticket');
+            toast.error(error.response?.data?.detail || 'Error al eliminar el ticket', { 
+                position: 'top-right',
+                id: 'delete-ticket-error' 
+            });
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Asegurarse de exportar la nueva función
     return {
         loading,
@@ -369,6 +391,7 @@ export const useTickets = () => {
         removeTicketItem,
         printTicket,
         getTicket,
-        askToNavigateToTicket
+        askToNavigateToTicket,
+        deleteTicket  // Añadir esta función
     };
 };

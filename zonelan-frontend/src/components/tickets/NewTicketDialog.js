@@ -81,7 +81,35 @@ const NewTicketDialog = ({ open, onClose, onSuccess }) => {
                     <Autocomplete
                         options={customers}
                         loading={customersLoading}
-                        getOptionLabel={(option) => option.name}
+                        getOptionLabel={(option) => {
+                            let label = option.name;
+                            if (option.business_name) {
+                                label += ` (${option.business_name})`;
+                            }
+                            if (option.tax_id) {
+                                label += ` - ${option.tax_id}`;
+                            }
+                            return label;
+                        }}
+                        renderOption={(props, option) => {
+                            // Extraemos la key para evitar warnings
+                            const { key, ...otherProps } = props;
+                            return (
+                                <Box component="li" key={option.id} {...otherProps}>
+                                    <Box>
+                                        <Typography variant="body1">
+                                            {option.name}
+                                            {option.business_name && ` (${option.business_name})`}
+                                        </Typography>
+                                        {option.tax_id && (
+                                            <Typography variant="body2" color="text.secondary">
+                                                CIF/NIF: {option.tax_id}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+                            );
+                        }}
                         value={selectedCustomer}
                         onChange={(event, newValue) => {
                             setSelectedCustomer(newValue);
@@ -102,24 +130,6 @@ const NewTicketDialog = ({ open, onClose, onSuccess }) => {
                                 }}
                             />
                         )}
-                        renderOption={(props, option) => {
-                            // Extraemos la key para evitar warnings
-                            const { key, ...otherProps } = props;
-                            return (
-                                <Box component="li" key={option.id} {...otherProps}>
-                                    <Box>
-                                        <Typography variant="body1">
-                                            {option.name}
-                                        </Typography>
-                                        {option.tax_id && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                {option.tax_id}
-                                            </Typography>
-                                        )}
-                                    </Box>
-                                </Box>
-                            );
-                        }}
                     />
 
                     <TextField
