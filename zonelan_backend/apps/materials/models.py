@@ -15,6 +15,25 @@ class Material(models.Model):
     def __str__(self):
         return self.name
 
+    # Añadir este método al modelo Material
+    @property
+    def stock_by_location(self):
+        """Devuelve un diccionario con el stock por ubicación"""
+        locations = self.locations.all().select_related('tray', 'tray__shelf', 'tray__shelf__department', 'tray__shelf__department__warehouse')
+        return [
+            {
+                'location_id': loc.id,
+                'warehouse': loc.tray.shelf.department.warehouse.name,
+                'department': loc.tray.shelf.department.name,
+                'shelf': loc.tray.shelf.name,
+                'tray': loc.tray.name,
+                'full_code': loc.tray.get_full_code(),
+                'quantity': loc.quantity,
+                'minimum_quantity': loc.minimum_quantity
+            }
+            for loc in locations
+        ]
+
 class MaterialControl(models.Model):
     OPERATION_CHOICES = [
         ('ADD', 'Añadir'),

@@ -25,7 +25,8 @@ INSTALLED_APPS = [
     'apps.materials.apps.MaterialsConfig',
     'apps.incidents.apps.IncidentsConfig',
     'apps.reports.apps.ReportsConfig',
-    'apps.tickets',
+    'apps.tickets.apps.TicketsConfig',
+    'apps.storage.apps.StorageConfig',  # Nueva app de almacenamiento
     'django_filters',
 ]
 

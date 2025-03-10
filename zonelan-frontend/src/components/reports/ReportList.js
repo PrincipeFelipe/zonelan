@@ -4,10 +4,12 @@ import {
     Typography,
     Button,
     Box,
-    IconButton
+    IconButton,
+    Tooltip,
+    Chip  // Añadir esta importación
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { Delete, Visibility, Add } from '@mui/icons-material';
+import { Delete, Visibility, Add, Print } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axiosConfig';
 import Swal from 'sweetalert2';
@@ -117,41 +119,245 @@ const ReportList = () => {
         }
     };
 
+    const handlePrint = async (reportId) => {
+        try {
+            // Obtener el reporte
+            const response = await axios.get(`/reports/reports/${reportId}/`);
+            const report = response.data;
+
+            // Verificar que el reporte existe
+            if (!report) {
+                toast.error('No se pudo encontrar el parte de trabajo');
+                return;
+            }
+
+            // Crear un iframe invisible para la impresión
+            const printIframe = document.createElement('iframe');
+            printIframe.style.position = 'absolute';
+            printIframe.style.top = '-9999px';
+            printIframe.style.left = '-9999px';
+            printIframe.style.height = '0';
+            printIframe.style.width = '0';
+            document.body.appendChild(printIframe);
+
+            // Esperar a que el iframe esté listo
+            printIframe.onload = () => {
+                try {
+                    // Acceder al documento dentro del iframe y escribir contenido
+                    const printDocument = printIframe.contentDocument || printIframe.contentWindow.document;
+                    printDocument.open();
+                    printDocument.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Parte de Trabajo #${report.id}</title>
+                            <style>
+                                body { font-family: Arial, sans-serif; margin: 20px; }
+                                h1 { font-size: 18px; margin-bottom: 10px; }
+                                .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+                                .section { margin-bottom: 15px; }
+                                .label { font-weight: bold; margin-right: 5px; }
+                                .value { }
+                                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                                th { background-color: #f2f2f2; }
+                                .footer { margin-top: 30px; display: flex; justify-content: space-between; }
+                                .signature-line { width: 45%; border-top: 1px solid #000; padding-top: 5px; text-align: center; }
+                                @media print {
+                                    body { -webkit-print-color-adjust: exact; color-adjust: exact; }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="header">
+                                <h1>Parte de Trabajo #${report.id}</h1>
+                                <div>
+                                    <span class="label">Fecha:</span>
+                                    <span class="value">${new Date(report.date).toLocaleDateString('es-ES')}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Cliente:</div>
+                                <div class="value">${report.customer_name || '-'}</div>
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Incidencia:</div>
+                                <div class="value">${report.incident_title || 'No asociada a incidencia'}</div>
+                                ${report.incident ? `<div class="value">ID Incidencia: #${report.incident}</div>` : ''}
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Descripción:</div>
+                                <div class="value">${report.description || '-'}</div>
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Trabajo realizado:</div>
+                                <div class="value">${report.work_done || '-'}</div>
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Horas trabajadas:</div>
+                                <div class="value">${report.hours_worked || '-'}</div>
+                            </div>
+                            
+                            <div class="section">
+                                <div class="label">Estado:</div>
+                                <div class="value">
+                                    ${report.status === 'DRAFT' ? 'Borrador' : 
+                                      report.status === 'COMPLETED' ? 'Completado' : 
+                                      report.status === 'DELETED' ? 'Eliminado' : report.status || ''}
+                                </div>
+                            </div>
+                            
+                            ${report.materials_used && report.materials_used.length > 0 ? `
+                            <div class="section">
+                                <div class="label">Materiales utilizados:</div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Material</th>
+                                            <th>Cantidad</th>
+                                            <th>Precio unitario</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${report.materials_used.map(material => `
+                                            <tr>
+                                                <td>${material.material_name}</td>
+                                                <td>${material.quantity}</td>
+                                                <td>${material.unit_price ? material.unit_price.toFixed(2) + ' €' : '-'}</td>
+                                                <td>${material.unit_price ? (material.unit_price * material.quantity).toFixed(2) + ' €' : '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ` : ''}
+                            
+                            ${report.technicians && report.technicians.length > 0 ? `
+                            <div class="section">
+                                <div class="label">Técnicos:</div>
+                                <ul>
+                                    ${report.technicians.map(tech => `
+                                        <li>${tech.technician_name}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                            ` : ''}
+                            
+                            <div class="footer">
+                                <div class="signature-line">Firma del técnico</div>
+                                <div class="signature-line">Firma del cliente</div>
+                            </div>
+                        </body>
+                        </html>
+                    `);
+                    printDocument.close();
+
+                    // Esperar a que se carguen los estilos y contenidos
+                    setTimeout(() => {
+                        // Imprimir el iframe
+                        printIframe.contentWindow.focus();
+                        printIframe.contentWindow.print();
+                        
+                        // Eliminar el iframe después de la impresión
+                        setTimeout(() => {
+                            document.body.removeChild(printIframe);
+                        }, 1000);
+                    }, 500);
+                    
+                    // Notificar al usuario
+                    toast.success('Preparando impresión...');
+                    
+                } catch (frameError) {
+                    console.error('Error al preparar el documento de impresión:', frameError);
+                    document.body.removeChild(printIframe);
+                    toast.error('Error al preparar el documento para impresión');
+                }
+            };
+
+            // Iniciar carga del iframe
+            printIframe.src = 'about:blank';
+
+        } catch (error) {
+            console.error('Error al preparar la impresión:', error);
+            toast.error('Error al preparar la impresión del parte de trabajo');
+        }
+    };
+
     const columns = [
         { 
             field: 'id', 
             headerName: 'ID', 
-            width: 70 
+            width: 70,
+            renderCell: (params) => (
+                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                    #{params.value}
+                </Typography>
+            ),
         },
         { 
             field: 'incident_title', 
             headerName: 'Incidencia', 
-            flex: 1 
+            flex: 1,
+            minWidth: 180,
+            renderCell: (params) => (
+                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
+                    <Typography variant="body2" fontWeight="500">
+                        {params.value}
+                    </Typography>
+                    {params.row.incident && (
+                        <Typography variant="caption" color="text.secondary">
+                            Incidencia #{params.row.incident}
+                        </Typography>
+                    )}
+                </Box>
+            )
         },
         { 
             field: 'customer_name', 
             headerName: 'Cliente', 
-            flex: 1 
-        },
-        { 
-            field: 'description', 
-            headerName: 'Descripción', 
-            flex: 1 
+            width: 180,
+            renderCell: (params) => (
+                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                    {params.value || '-'}
+                </Typography>
+            )
         },
         { 
             field: 'date', 
             headerName: 'Fecha', 
-            flex: 1,
+            width: 120,
             renderCell: (params) => {
-                if (!params.value) return '-';
+                if (!params.value) return (
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>-</Typography>
+                );
                 
                 try {
                     const date = new Date(params.value);
-                    if (isNaN(date)) return 'Fecha inválida';
+                    if (isNaN(date)) return (
+                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                            Fecha inválida
+                        </Typography>
+                    );
                     
-                    return date.toLocaleDateString('es-ES');
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                            <Typography variant="body2">
+                                {date.toLocaleDateString('es-ES')}
+                            </Typography>
+                        </Box>
+                    );
                 } catch (error) {
-                    return 'Fecha inválida';
+                    return (
+                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                            Fecha inválida
+                        </Typography>
+                    );
                 }
             }
         },
@@ -161,41 +367,114 @@ const ReportList = () => {
             width: 120,
             renderCell: (params) => {
                 const status = params.row?.status;
-                if (status === 'DRAFT') return 'Borrador';
-                if (status === 'COMPLETED') return 'Completado';
-                if (status === 'DELETED') return 'Eliminado';
-                return status || '';
+                let label, color, borderColor;
+                
+                if (status === 'DRAFT') {
+                    label = 'Borrador';
+                    color = '#ed6c02';
+                    borderColor = '#ed6c02';
+                } else if (status === 'COMPLETED') {
+                    label = 'Completado';
+                    color = '#2e7d32';
+                    borderColor = '#2e7d32';
+                } else if (status === 'DELETED') {
+                    label = 'Eliminado';
+                    color = '#d32f2f';
+                    borderColor = '#d32f2f';
+                } else {
+                    label = status || '';
+                    color = '#757575';
+                    borderColor = '#757575';
+                }
+                
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                        <Chip
+                            size="small"
+                            label={label}
+                            sx={{
+                                color: color,
+                                border: `1px solid ${borderColor}`,
+                                backgroundColor: 'transparent',
+                                fontWeight: 500,
+                                fontSize: '0.75rem'
+                            }}
+                            variant="outlined"
+                        />
+                    </Box>
+                );
             }
         },
         { 
             field: 'hours_worked', 
             headerName: 'Horas', 
             width: 100,
-            type: 'number'
+            type: 'number',
+            align: 'right',
+            headerAlign: 'right',
+            renderCell: (params) => (
+                <Typography 
+                    variant="body2" 
+                    sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'flex-end', 
+                        height: '100%',
+                        width: '100%'
+                    }}
+                >
+                    {params.value || '-'}
+                </Typography>
+            )
         },
         {
             field: 'actions',
             headerName: 'Acciones',
-            width: 120,
+            width: 140,
             sortable: false,
             filterable: false,
+            align: 'center',
+            headerAlign: 'center',
             renderCell: (params) => (
-                <Box>
-                    <IconButton 
-                        onClick={() => navigate(`/dashboard/reports/${params.row.id}`)}
-                        size="small"
-                        title="Ver detalles"
-                    >
-                        <Visibility />
-                    </IconButton>
-                    <IconButton 
-                        onClick={() => handleDelete(params.row.id)}
-                        size="small"
-                        color="error"
-                        title="Eliminar parte"
-                    >
-                        <Delete />
-                    </IconButton>
+                <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100%',
+                    width: '100%',
+                    gap: '4px',
+                    '& .MuiIconButton-root': {
+                        padding: '4px',
+                        fontSize: '0.875rem',
+                    }
+                }}>
+                    <Tooltip title="Ver detalles">
+                        <IconButton 
+                            onClick={() => navigate(`/dashboard/reports/${params.row.id}`)}
+                            size="small"
+                            sx={{ color: 'info.main' }}
+                        >
+                            <Visibility fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Imprimir">
+                        <IconButton 
+                            onClick={() => handlePrint(params.row.id)}
+                            size="small"
+                            sx={{ color: 'text.secondary' }}
+                        >
+                            <Print fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Eliminar">
+                        <IconButton 
+                            onClick={() => handleDelete(params.row.id)}
+                            size="small"
+                            sx={{ color: 'error.main' }}
+                        >
+                            <Delete fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                 </Box>
             )
         }
@@ -271,6 +550,9 @@ const ReportList = () => {
                             pagination: {
                                 paginationModel: { pageSize: 10, page: 0 },
                             },
+                            sorting: {
+                                sortModel: [{ field: 'date', sort: 'desc' }],
+                            },
                         }}
                         pageSizeOptions={[10, 25, 50]}
                         disableRowSelectionOnClick
@@ -286,9 +568,44 @@ const ReportList = () => {
                         getRowId={(row) => row.id}
                         localeText={localeText}
                         sx={{
-                            '& .MuiDataGrid-toolbarContainer': {
-                                borderBottom: '1px solid rgba(224, 224, 224, 1)',
+                            border: '1px solid #E0E0E0',
+                            borderRadius: 1,
+                            '& .MuiDataGrid-row': {
+                                borderBottom: '1px solid #F5F5F5',
+                            },
+                            '& .MuiDataGrid-columnHeader': {
+                                backgroundColor: '#F5F5F5',
+                                borderRight: '1px solid #E0E0E0',
+                                '&:last-child': {
+                                    borderRight: 'none',
+                                },
+                            },
+                            '& .MuiDataGrid-cell': {
+                                borderRight: '1px solid #F5F5F5',
+                                '&:last-child': {
+                                    borderRight: 'none',
+                                },
                                 padding: '8px 16px',
+                                display: 'flex',
+                                alignItems: 'center', // Centrado vertical para todas las celdas
+                            },
+                            '& .MuiDataGrid-columnHeaders': {
+                                borderBottom: '2px solid #E0E0E0',
+                                fontSize: '0.875rem',
+                                fontWeight: 'bold',
+                            },
+                            '& .MuiDataGrid-toolbarContainer': {
+                                borderBottom: '1px solid #E0E0E0',
+                                padding: '8px 16px',
+                            },
+                            '& .MuiDataGrid-footerContainer': {
+                                borderTop: '2px solid #E0E0E0',
+                            },
+                            '& .MuiDataGrid-virtualScroller': {
+                                backgroundColor: '#FFFFFF',
+                            },
+                            '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                                outline: 'none',
                             },
                         }}
                     />

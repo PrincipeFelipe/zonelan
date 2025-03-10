@@ -183,51 +183,75 @@ const MaterialControlList = () => {
         }
     };
 
-    // Modificar la definición de columnas y la implementación de DataGrid
-    const columns = [
-        { 
-            field: 'id', 
-            headerName: 'ID', 
-            width: 70,
-            renderCell: (params) => (
+    // Modificar las columnas para aplicar alineación vertical consistente
+
+const columns = [
+    { 
+        field: 'id', 
+        headerName: 'ID', 
+        width: 70,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                 <Typography variant="body2">
                     #{params.value}
                 </Typography>
-            ),
-        },
-        { 
-            field: 'timestamp', 
-            headerName: 'Fecha', 
-            width: 180,
-            renderCell: (params) => (
-                <Box sx={{ lineHeight: 1.2 }}>
-                    <Typography variant="body2">
-                        {formatDate(params.value).split(' ')[0]}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        {formatDate(params.value).split(' ')[1] || ''}
-                    </Typography>
-                </Box>
-            )
-        },
-        { 
-            field: 'material_name', 
-            headerName: 'Material', 
-            flex: 1, 
-            minWidth: 150
-        },
-        { 
-            field: 'quantity', 
-            headerName: 'Cantidad', 
-            width: 100,
-            align: 'right',
-            headerAlign: 'right',
-        },
-        { 
-            field: 'operation', 
-            headerName: 'Operación', 
-            width: 120,
-            renderCell: (params) => (
+            </Box>
+        ),
+    },
+    { 
+        field: 'timestamp', 
+        headerName: 'Fecha', 
+        width: 180,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
+                <Typography variant="body2">
+                    {formatDate(params.value).split(' ')[0]}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                    {formatDate(params.value).split(' ')[1] || ''}
+                </Typography>
+            </Box>
+        )
+    },
+    { 
+        field: 'material_name', 
+        headerName: 'Material', 
+        flex: 1, 
+        minWidth: 150,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                <Typography variant="body2">
+                    {params.value}
+                </Typography>
+            </Box>
+        )
+    },
+    { 
+        field: 'quantity', 
+        headerName: 'Cantidad', 
+        width: 100,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: (params) => (
+            <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'flex-end', 
+                height: '100%',
+                width: '100%' 
+            }}>
+                <Typography variant="body2">
+                    {params.value}
+                </Typography>
+            </Box>
+        )
+    },
+    { 
+        field: 'operation', 
+        headerName: 'Operación', 
+        width: 120,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                 <Chip 
                     size="small" 
                     label={params.value === 'ADD' ? 'Entrada' : 'Salida'} 
@@ -239,26 +263,28 @@ const MaterialControlList = () => {
                         backgroundColor: 'transparent'
                     }}
                 />
-            )
-        },
-        { 
-            field: 'reason', 
-            headerName: 'Motivo', 
-            width: 150,
-            renderCell: (params) => {
-                const reason = params.value;
-                let color;
-                
-                switch (reason) {
-                    case 'COMPRA': color = '#0277bd'; break;
-                    case 'VENTA': color = '#ed6c02'; break;
-                    case 'RETIRADA': color = '#9c27b0'; break;
-                    case 'USO': color = '#d32f2f'; break;
-                    case 'DEVOLUCION': color = '#2e7d32'; break;
-                    default: color = '#757575';
-                }
-                
-                return (
+            </Box>
+        )
+    },
+    { 
+        field: 'reason', 
+        headerName: 'Motivo', 
+        width: 150,
+        renderCell: (params) => {
+            const reason = params.value;
+            let color;
+            
+            switch (reason) {
+                case 'COMPRA': color = '#0277bd'; break;
+                case 'VENTA': color = '#ed6c02'; break;
+                case 'RETIRADA': color = '#9c27b0'; break;
+                case 'USO': color = '#d32f2f'; break;
+                case 'DEVOLUCION': color = '#2e7d32'; break;
+                default: color = '#757575';
+            }
+            
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                     <Chip 
                         size="small" 
                         label={getReasonLabel(params.value, params.row.ticket)} 
@@ -269,25 +295,34 @@ const MaterialControlList = () => {
                         }}
                         variant="outlined"
                     />
-                );
-            }
-        },
-        { 
-            field: 'user_username', 
-            headerName: 'Usuario', 
-            width: 130 
-        },
-        { 
-            field: 'reference', 
-            headerName: 'Referencia', 
-            width: 200,
-            flex: 1,
-            renderCell: (params) => {
-                const row = params.row;
-                
-                // 1. Verificar si hay albarán
-                if (row.invoice_url) {
-                    return (
+                </Box>
+            );
+        }
+    },
+    { 
+        field: 'user_username', 
+        headerName: 'Usuario', 
+        width: 130,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                <Typography variant="body2">
+                    {params.value}
+                </Typography>
+            </Box>
+        )
+    },
+    { 
+        field: 'reference', 
+        headerName: 'Referencia', 
+        width: 200,
+        flex: 1,
+        renderCell: (params) => {
+            const row = params.row;
+            
+            // 1. Verificar si hay albarán
+            if (row.invoice_url) {
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                         <Button
                             size="small"
                             variant="text"
@@ -296,31 +331,33 @@ const MaterialControlList = () => {
                         >
                             Ver Albarán
                         </Button>
+                    </Box>
+                );
+            }
+            
+            // 2. Verificar si hay reporte
+            if (row.report) {
+                // Si el reporte está eliminado
+                if (row.report_deleted) {
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', gap: 0.5 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Reporte #{row.report}
+                            </Typography>
+                            <Chip
+                                label="Eliminado"
+                                size="small"
+                                color="default"
+                                variant="outlined"
+                                sx={{ fontSize: '0.65rem' }}
+                            />
+                        </Box>
                     );
                 }
                 
-                // 2. Verificar si hay reporte
-                if (row.report) {
-                    // Si el reporte está eliminado
-                    if (row.report_deleted) {
-                        return (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Reporte #{row.report}
-                                </Typography>
-                                <Chip
-                                    label="Eliminado"
-                                    size="small"
-                                    color="default"
-                                    variant="outlined"
-                                    sx={{ fontSize: '0.65rem' }}
-                                />
-                            </Box>
-                        );
-                    }
-                    
-                    // Si el reporte existe y no está eliminado
-                    return (
+                // Si el reporte existe y no está eliminado
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                         <Link 
                             component={RouterLink} 
                             to={`/dashboard/reports/${row.report}`}
@@ -329,31 +366,33 @@ const MaterialControlList = () => {
                             <AssignmentIcon fontSize="small" />
                             Reporte #{row.report}
                         </Link>
+                    </Box>
+                );
+            }
+            
+            // 3. Verificar si hay ticket
+            if (row.ticket) {
+                // Si el ticket está cancelado
+                if (row.ticket_canceled) {
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', gap: 0.5 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Ticket #{row.ticket}
+                            </Typography>
+                            <Chip
+                                label="Cancelado"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                sx={{ fontSize: '0.65rem' }}
+                            />
+                        </Box>
                     );
                 }
                 
-                // 3. Verificar si hay ticket
-                if (row.ticket) {
-                    // Si el ticket está cancelado
-                    if (row.ticket_canceled) {
-                        return (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Ticket #{row.ticket}
-                                </Typography>
-                                <Chip
-                                    label="Cancelado"
-                                    size="small"
-                                    color="error"
-                                    variant="outlined"
-                                    sx={{ fontSize: '0.65rem' }}
-                                />
-                            </Box>
-                        );
-                    }
-                    
-                    // Si el ticket existe y no está cancelado
-                    return (
+                // Si el ticket existe y no está cancelado
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
                         <Link 
                             component={RouterLink} 
                             to={`/dashboard/tickets/${row.ticket}`}
@@ -362,14 +401,19 @@ const MaterialControlList = () => {
                             <ReceiptIcon fontSize="small" />
                             Ticket #{row.ticket}
                         </Link>
-                    );
-                }
-                
-                // Si no hay referencia
-                return '-';
+                    </Box>
+                );
             }
-        },
-    ];
+            
+            // Si no hay referencia
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                    <Typography variant="body2">-</Typography>
+                </Box>
+            );
+        }
+    },
+];
 
     // Componente para el overlay de carga
     const CustomLoadingOverlay = () => (
@@ -555,8 +599,8 @@ const MaterialControlList = () => {
                 </Paper>
             )}
 
-            <Paper sx={{ width: '100%' }}>
-                <Box sx={{ height: 600, width: '100%' }}>
+            <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+                <Box sx={{ width: '100%' }}>
                     <DataGrid
                         rows={filteredControls}
                         columns={columns}
@@ -587,6 +631,7 @@ const MaterialControlList = () => {
                         sx={{
                             border: '1px solid #E0E0E0',
                             borderRadius: 1,
+                            minWidth: 0, // Importante: evita que la tabla se desborde
                             '& .MuiDataGrid-row': {
                                 borderBottom: '1px solid #F5F5F5',
                             },
@@ -602,7 +647,12 @@ const MaterialControlList = () => {
                                 '&:last-child': {
                                     borderRight: 'none',
                                 },
-                                padding: '8px 16px'
+                                padding: '8px 16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                '& .MuiBox-root': {
+                                    width: '100%'
+                                }
                             },
                             '& .MuiDataGrid-columnHeaders': {
                                 borderBottom: '2px solid #E0E0E0',

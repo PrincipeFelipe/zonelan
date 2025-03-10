@@ -555,49 +555,37 @@ const columns = [
         headerName: 'ID',
         width: 70,
         renderCell: (params) => (
-            <Typography variant="body2" fontWeight="500" color="primary">
-                #{params.value}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                <Typography variant="body2" fontWeight="500" color="primary">
+                    #{params.value}
+                </Typography>
+            </Box>
         ),
     },
     { 
         field: 'title',
         headerName: 'Título',
         flex: 1,
-        minWidth: 200,
+        width: 200,
         renderCell: (params) => (
-            <Box sx={{ py: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
                 <Typography variant="body2" fontWeight="500">
                     {params.value}
                 </Typography>
-                {params.row.description && (
-                    <Typography 
-                        variant="caption" 
-                        color="text.secondary"
-                        sx={{ 
-                            display: '-webkit-box',
-                            WebkitLineClamp: 1,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                        }}
-                    >
-                        {params.row.description.substring(0, 60)}{params.row.description.length > 60 ? '...' : ''}
-                    </Typography>
-                )}
             </Box>
         ),
     },
     {
         field: 'customer_name',
         headerName: 'Cliente',
-        width: 180,
+        width: 300,
         renderCell: (params) => {
             const customer = customers.find(c => c.id === params.row.customer);
+            
             return (
-                <Box sx={{ py: 0.5 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
                     <Typography variant="body2">
-                        {params.value || '-'}
+                        {params.value}
                     </Typography>
                     {customer?.business_name && (
                         <Typography variant="caption" color="text.secondary">
@@ -614,61 +602,61 @@ const columns = [
         width: 120,
         renderCell: (params) => {
             const statusMap = {
-                'PENDING': { label: 'Pendiente', color: '#ed6c02', variant: 'outlined' },
-                'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', variant: 'outlined' },
-                'RESOLVED': { label: 'Resuelta', color: '#2e7d32', variant: 'outlined' },
-                'CLOSED': { label: 'Cerrada', color: '#616161', variant: 'outlined' }
+                'PENDING': { label: 'Pendiente', color: '#ed6c02', border: '#ed6c02' },
+                'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', border: '#0288d1' },
+                'RESOLVED': { label: 'Resuelta', color: '#2e7d32', border: '#2e7d32' },
+                'CLOSED': { label: 'Cerrada', color: '#616161', border: '#616161' }
             };
             
-            const status = statusMap[params.value] || { label: params.value, color: '#757575', variant: 'outlined' };
+            const statusConfig = statusMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
             
             return (
-                <Chip
-                    size="small"
-                    label={status.label}
-                    sx={{
-                        color: status.color,
-                        border: `1px solid ${status.color}`,
-                        fontWeight: 500,
-                        fontSize: '0.75rem',
-                        height: 24,
-                        backgroundColor: 'transparent'
-                    }}
-                    variant={status.variant}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                    <Chip
+                        size="small"
+                        label={statusConfig.label}
+                        sx={{
+                            color: statusConfig.color,
+                            border: `1px solid ${statusConfig.border}`,
+                            backgroundColor: 'transparent',
+                            fontWeight: 500
+                        }}
+                        variant="outlined"
+                    />
+                </Box>
             );
-        },
+        }
     },
     {
         field: 'priority',
         headerName: 'Prioridad',
-        width: 100,
+        width: 120,
         renderCell: (params) => {
             const priorityMap = {
-                'LOW': { label: 'Baja', color: '#2e7d32', variant: 'outlined' },
-                'MEDIUM': { label: 'Media', color: '#0288d1', variant: 'outlined' },
-                'HIGH': { label: 'Alta', color: '#ed6c02', variant: 'outlined' },
-                'CRITICAL': { label: 'Crítica', color: '#d32f2f', variant: 'outlined' }
+                'LOW': { label: 'Baja', color: '#2e7d32', border: '#2e7d32' },
+                'MEDIUM': { label: 'Media', color: '#0288d1', border: '#0288d1' },
+                'HIGH': { label: 'Alta', color: '#ed6c02', border: '#ed6c02' },
+                'CRITICAL': { label: 'Crítica', color: '#d32f2f', border: '#d32f2f' }
             };
             
-            const priority = priorityMap[params.value] || { label: params.value, color: '#757575', variant: 'outlined' };
+            const priorityConfig = priorityMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
             
             return (
-                <Chip
-                    size="small"
-                    label={priority.label}
-                    sx={{
-                        color: priority.color,
-                        border: `1px solid ${priority.color}`,
-                        fontWeight: 500,
-                        fontSize: '0.75rem',
-                        height: 24,
-                        backgroundColor: 'transparent'
-                    }}
-                    variant={priority.variant}
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                    <Chip
+                        size="small"
+                        label={priorityConfig.label}
+                        sx={{
+                            color: priorityConfig.color,
+                            border: `1px solid ${priorityConfig.border}`,
+                            backgroundColor: 'transparent',
+                            fontWeight: 500
+                        }}
+                        variant="outlined"
+                    />
+                </Box>
             );
-        },
+        }
     },
     {
         field: 'created_at',
@@ -687,7 +675,7 @@ const columns = [
                 const isRecent = diffDays < 3;
                 
                 return (
-                    <Box sx={{ lineHeight: 1.2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
                         <Typography variant="body2">
                             {format(date, 'dd/MM/yyyy')}
                         </Typography>
@@ -697,7 +685,11 @@ const columns = [
                     </Box>
                 );
             } catch (error) {
-                return 'Fecha inválida';
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                        <Typography variant="body2">Fecha inválida</Typography>
+                    </Box>
+                );
             }
         },
     },
@@ -713,6 +705,9 @@ const columns = [
             <Box sx={{ 
                 display: 'flex', 
                 justifyContent: 'center',
+                alignItems: 'center',
+                height: '100%',
+                width: '100%',
                 gap: '4px',
                 '& .MuiIconButton-root': {
                     padding: '4px',
@@ -862,70 +857,77 @@ const columns = [
                                 <CircularProgress />
                             </Box>
                         ) : (
-                            <DataGrid
-                                rows={incidents}
-                                columns={columns}
-                                initialState={{
-                                    pagination: {
-                                        paginationModel: { pageSize: 10, page: 0 },
-                                    },
-                                    sorting: {
-                                        sortModel: [{ field: 'created_at', sort: 'desc' }],
-                                    },
-                                }}
-                                pageSizeOptions={[10, 25, 50]}
-                                disableRowSelectionOnClick
-                                loading={loading}
-                                autoHeight
-                                slots={{ toolbar: GridToolbar }}
-                                slotProps={{
-                                    toolbar: {
-                                        showQuickFilter: true,
-                                        quickFilterProps: { debounceMs: 500 },
-                                    },
-                                }}
-                                getRowId={(row) => row.id}
-                                localeText={localeText}
-                                sx={{
-                                    border: '1px solid #E0E0E0',
-                                    borderRadius: 1,
-                                    '& .MuiDataGrid-row': {
-                                        borderBottom: '1px solid #F5F5F5',
-                                    },
-                                    '& .MuiDataGrid-columnHeader': {
-                                        backgroundColor: '#F5F5F5',
-                                        borderRight: '1px solid #E0E0E0',
-                                        '&:last-child': {
-                                            borderRight: 'none',
-                                        },
-                                    },
-                                    '& .MuiDataGrid-cell': {
-                                        borderRight: '1px solid #F5F5F5',
-                                        '&:last-child': {
-                                            borderRight: 'none',
-                                        },
-                                        padding: '8px 16px'
-                                    },
-                                    '& .MuiDataGrid-columnHeaders': {
-                                        borderBottom: '2px solid #E0E0E0',
-                                        fontSize: '0.875rem',
-                                        fontWeight: 'bold',
-                                    },
-                                    '& .MuiDataGrid-toolbarContainer': {
-                                        borderBottom: '1px solid #E0E0E0',
-                                        padding: '8px 16px',
-                                    },
-                                    '& .MuiDataGrid-footerContainer': {
-                                        borderTop: '2px solid #E0E0E0',
-                                    },
-                                    '& .MuiDataGrid-virtualScroller': {
-                                        backgroundColor: '#FFFFFF',
-                                    },
-                                    '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
-                                        outline: 'none',
-                                    },
-                                }}
-                            />
+                            // Actualizar el DataGrid para asegurar un centrado vertical consistente
+
+<DataGrid
+    rows={incidents}
+    columns={columns}
+    initialState={{
+        pagination: {
+            paginationModel: { pageSize: 10, page: 0 },
+        },
+        sorting: {
+            sortModel: [{ field: 'created_at', sort: 'desc' }],
+        },
+    }}
+    pageSizeOptions={[10, 25, 50]}
+    disableRowSelectionOnClick
+    loading={loading}
+    autoHeight
+    slots={{ toolbar: GridToolbar }}
+    slotProps={{
+        toolbar: {
+            showQuickFilter: true,
+            quickFilterProps: { debounceMs: 500 },
+        },
+    }}
+    getRowId={(row) => row.id}
+    localeText={localeText}
+    sx={{
+        border: '1px solid #E0E0E0',
+        borderRadius: 1,
+        '& .MuiDataGrid-row': {
+            borderBottom: '1px solid #F5F5F5',
+        },
+        '& .MuiDataGrid-columnHeader': {
+            backgroundColor: '#F5F5F5',
+            borderRight: '1px solid #E0E0E0',
+            '&:last-child': {
+                borderRight: 'none',
+            },
+        },
+        '& .MuiDataGrid-cell': {
+            borderRight: '1px solid #F5F5F5',
+            '&:last-child': {
+                borderRight: 'none',
+            },
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center', // Centrado vertical para todas las celdas
+            '& .MuiBox-root': {
+                width: '100%' // Asegurar que todos los contenedores Box ocupen el ancho completo
+            }
+        },
+        '& .MuiDataGrid-columnHeaders': {
+            borderBottom: '2px solid #E0E0E0',
+            fontSize: '0.875rem',
+            fontWeight: 'bold',
+        },
+        '& .MuiDataGrid-toolbarContainer': {
+            borderBottom: '1px solid #E0E0E0',
+            padding: '8px 16px',
+        },
+        '& .MuiDataGrid-footerContainer': {
+            borderTop: '2px solid #E0E0E0',
+        },
+        '& .MuiDataGrid-virtualScroller': {
+            backgroundColor: '#FFFFFF',
+        },
+        '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+            outline: 'none',
+        },
+    }}
+/>
                         )}
                     </Box>
                 </Paper>
