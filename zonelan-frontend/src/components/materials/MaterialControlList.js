@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Paper, TableContainer, Table, TableHead,
-    TableBody, TableRow, TableCell, TablePagination, Chip, Link,
+    Box, Typography, Paper, Chip, Link,
     TextField, MenuItem, FormControl, InputLabel, Select, Button,
     Grid, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, 
-    DialogActions
+    DialogActions, LinearProgress
 } from '@mui/material';
+import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
     FilterList, Receipt, Close, ReceiptOutlined,
@@ -14,14 +14,14 @@ import {
 import AssignmentIcon from '@mui/icons-material/Assignment'; // Para reportes
 import ReceiptIcon from '@mui/icons-material/Receipt'; // Para tickets
 import DescriptionIcon from '@mui/icons-material/Description'; // Para albaranes
-import { toast } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
     const [filteredControls, setFilteredControls] = useState([]);
-    const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [loading, setLoading] = useState(true);
     const [showFilters, setShowFilters] = useState(false);
     
@@ -119,7 +119,6 @@ const MaterialControlList = () => {
         }
 
         setFilteredControls(filteredData);
-        setPage(0);
     };
 
     const handleFilterChange = (e) => {
@@ -176,91 +175,54 @@ const MaterialControlList = () => {
 
     // Función para formatear la fecha
     const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('es-ES');
+        if (!dateString) return '';
+        try {
+            return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: es });
+        } catch (error) {
+            return dateString;
+        }
     };
 
-    // Función para formatear la referencia al reporte, teniendo en cuenta si está eliminado
-    const formatDeletedReportReference = (control) => {
-        if (!control.report) {
-            return '-';
-        }
-        
-        // Si el reporte está marcado como eliminado
-        if (control.report_deleted) {
-            return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="body2" color="text.secondary">
-                        Reporte #{control.report}
-                    </Typography>
-                    <Chip
-                        label="Eliminado"
-                        size="small"
-                        color="default"
-                        variant="outlined"
-                        sx={{ fontSize: '0.65rem' }}
-                    />
-                </Box>
-            );
-        }
-        
-        // Si el reporte existe y no está eliminado
-        return (
-            <Link 
-                component={RouterLink} 
-                to={`/dashboard/reports/${control.report}`}
-            >
-                Ver reporte #{control.report}
-            </Link>
-        );
-    };
-
-    // Función para formatear la referencia al ticket, teniendo en cuenta si está cancelado
-    const formatTicketReference = (control) => {
-        if (!control.ticket) {
-            return '-';
-        }
-        
-        // Si el ticket está cancelado
-        if (control.ticket_canceled) {
-            return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="body2" color="text.secondary">
-                        Ticket #{control.ticket}
-                    </Typography>
-                    <Chip
-                        label="Cancelado"
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        sx={{ fontSize: '0.65rem' }}
-                    />
-                </Box>
-            );
-        }
-        
-        // Si el ticket existe y no está cancelado
-        return (
-            <Link 
-                component={RouterLink} 
-                to={`/dashboard/tickets/${control.ticket}`}
-            >
-                Ver ticket #{control.ticket}
-        </Link>
-        );
-    };
-
-    // Modificar la definición de columnas
-
-    // 1. Eliminar las columnas individuales de Reporte, Ticket y Albarán
-    // 2. Añadir una nueva columna unificada "Referencia"
-
+    // Modificar la definición de columnas y la implementación de DataGrid
     const columns = [
-        { field: 'id', headerName: 'ID', width: 70 },
-        { field: 'timestamp', headerName: 'Fecha', width: 180, 
-            renderCell: (params) => formatDate(params.value) 
+        { 
+            field: 'id', 
+            headerName: 'ID', 
+            width: 70,
+            renderCell: (params) => (
+                <Typography variant="body2">
+                    #{params.value}
+                </Typography>
+            ),
         },
-        { field: 'material_name', headerName: 'Material', flex: 1 },
+        { 
+            field: 'timestamp', 
+            headerName: 'Fecha', 
+            width: 180,
+            renderCell: (params) => (
+                <Box sx={{ lineHeight: 1.2 }}>
+                    <Typography variant="body2">
+                        {formatDate(params.value).split(' ')[0]}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {formatDate(params.value).split(' ')[1] || ''}
+                    </Typography>
+                </Box>
+            )
+        },
+        { 
+            field: 'material_name', 
+            headerName: 'Material', 
+            flex: 1, 
+            minWidth: 150
+        },
+        { 
+            field: 'quantity', 
+            headerName: 'Cantidad', 
+            width: 100,
+            align: 'right',
+            headerAlign: 'right',
+        },
         { 
             field: 'operation', 
             headerName: 'Operación', 
@@ -269,24 +231,52 @@ const MaterialControlList = () => {
                 <Chip 
                     size="small" 
                     label={params.value === 'ADD' ? 'Entrada' : 'Salida'} 
-                    color={getOperationColor(params.value)}
+                    color={params.value === 'ADD' ? 'success' : 'error'}
+                    variant="outlined"
+                    sx={{ 
+                        border: `1px solid ${params.value === 'ADD' ? '#2e7d32' : '#d32f2f'}`,
+                        color: params.value === 'ADD' ? '#2e7d32' : '#d32f2f',
+                        backgroundColor: 'transparent'
+                    }}
                 />
             )
         },
-        { field: 'quantity', headerName: 'Cantidad', width: 120 },
         { 
             field: 'reason', 
             headerName: 'Motivo', 
             width: 150,
-            renderCell: (params) => (
-                <Chip 
-                    size="small" 
-                    label={getReasonLabel(params.value)} 
-                    color={getReasonColor(params.value)}
-                />
-            )
+            renderCell: (params) => {
+                const reason = params.value;
+                let color;
+                
+                switch (reason) {
+                    case 'COMPRA': color = '#0277bd'; break;
+                    case 'VENTA': color = '#ed6c02'; break;
+                    case 'RETIRADA': color = '#9c27b0'; break;
+                    case 'USO': color = '#d32f2f'; break;
+                    case 'DEVOLUCION': color = '#2e7d32'; break;
+                    default: color = '#757575';
+                }
+                
+                return (
+                    <Chip 
+                        size="small" 
+                        label={getReasonLabel(params.value, params.row.ticket)} 
+                        sx={{
+                            color: color,
+                            border: `1px solid ${color}`,
+                            backgroundColor: 'transparent'
+                        }}
+                        variant="outlined"
+                    />
+                );
+            }
         },
-        // Nueva columna unificada "Referencia"
+        { 
+            field: 'user_username', 
+            headerName: 'Usuario', 
+            width: 130 
+        },
         { 
             field: 'reference', 
             headerName: 'Referencia', 
@@ -296,13 +286,13 @@ const MaterialControlList = () => {
                 const row = params.row;
                 
                 // 1. Verificar si hay albarán
-                if (row.invoice) {
+                if (row.invoice_url) {
                     return (
                         <Button
                             size="small"
                             variant="text"
-                            startIcon={<Receipt />}
-                            onClick={() => handleViewInvoice(row.invoice)}
+                            startIcon={<ReceiptOutlined />}
+                            onClick={() => handleViewInvoice(row.invoice_url)}
                         >
                             Ver Albarán
                         </Button>
@@ -379,21 +369,82 @@ const MaterialControlList = () => {
                 return '-';
             }
         },
-        { 
-            field: 'user_username', 
-            headerName: 'Usuario', 
-            width: 150 
-        }
     ];
 
+    // Componente para el overlay de carga
+    const CustomLoadingOverlay = () => (
+        <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '100%',
+            padding: 3
+        }}>
+            <LinearProgress sx={{ width: '50%', mb: 2 }} />
+            <Typography variant="body2" color="text.secondary">
+                Cargando historial de materiales...
+            </Typography>
+        </Box>
+    );
+
+    // Traducción para DataGrid
+    const localeText = {
+        // Toolbar
+        toolbarDensity: 'Densidad',
+        toolbarDensityLabel: 'Densidad',
+        toolbarDensityCompact: 'Compacta',
+        toolbarDensityStandard: 'Estándar',
+        toolbarDensityComfortable: 'Cómoda',
+        toolbarColumns: 'Columnas',
+        toolbarFilters: 'Filtros',
+        toolbarExport: 'Exportar',
+        toolbarQuickFilterPlaceholder: 'Buscar...',
+        toolbarQuickFilterLabel: 'Buscar',
+        
+        // Columnas
+        columnMenuLabel: 'Menú',
+        columnMenuShowColumns: 'Mostrar columnas',
+        columnMenuFilter: 'Filtrar',
+        columnMenuHideColumn: 'Ocultar',
+        columnMenuUnsort: 'Desordenar',
+        columnMenuSortAsc: 'Ordenar ASC',
+        columnMenuSortDesc: 'Ordenar DESC',
+        
+        // Filtros
+        filterPanelAddFilter: 'Añadir filtro',
+        filterPanelDeleteIconLabel: 'Borrar',
+        filterPanelOperators: 'Operadores',
+        filterPanelOperatorAnd: 'Y',
+        filterPanelOperatorOr: 'O',
+        filterPanelColumns: 'Columnas',
+        
+        // Paginación
+        footerTotalRows: 'Total de filas:',
+        footerTotalVisibleRows: 'Filas visibles:',
+        footerRowSelected: 'fila seleccionada',
+        footerRowsSelected: 'filas seleccionadas',
+        
+        // Mensajes
+        noRowsLabel: 'No hay datos',
+        errorOverlayDefaultLabel: 'Ha ocurrido un error.',
+        
+        // Exportar
+        toolbarExportCSV: 'Descargar CSV',
+        toolbarExportPrint: 'Imprimir',
+    };
+
+    // Modificar el componente DataGrid para que coincida con el estilo de las otras tablas
     return (
         <Box sx={{ p: 2 }}>
+            <Toaster position="top-right" />
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6">
                     Control de Materiales
                 </Typography>
                 <Box>
-                    <Tooltip title={showFilters ? "Ocultar filtros" : "Mostrar filtros"}>
+                    <Tooltip title={showFilters ? "Ocultar filtros avanzados" : "Mostrar filtros avanzados"}>
                         <IconButton onClick={() => setShowFilters(!showFilters)}>
                             <FilterList />
                         </IconButton>
@@ -504,141 +555,76 @@ const MaterialControlList = () => {
                 </Paper>
             )}
 
-            <Paper>
-                <TableContainer>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Fecha</TableCell>
-                                <TableCell>Material</TableCell>
-                                <TableCell>Cantidad</TableCell>
-                                <TableCell>Operación</TableCell>
-                                <TableCell>Motivo</TableCell>
-                                <TableCell>Usuario</TableCell>
-                                <TableCell>Referencia</TableCell> {/* Columna unificada */}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {loading ? (
-                                <TableRow>
-                                    <TableCell colSpan={7} align="center">
-                                        Cargando...
-                                    </TableCell>
-                                </TableRow>
-                            ) : filteredControls.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={7} align="center">
-                                        No hay registros disponibles
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                filteredControls
-                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                    .map((control) => (
-                                        <TableRow key={control.id}>
-                                            <TableCell>
-                                                {formatDate(control.timestamp)}
-                                            </TableCell>
-                                            <TableCell>{control.material_name}</TableCell>
-                                            <TableCell>{control.quantity}</TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    label={control.operation === 'ADD' ? 'Entrada' : 'Salida'} 
-                                                    color={getOperationColor(control.operation)}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    label={getReasonLabel(control.reason, control.ticket)} 
-                                                    color={getReasonColor(control.reason)}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell>{control.user_name || control.user_username}</TableCell>
-                                            <TableCell>
-                                                {/* Renderizado de la referencia unificada */}
-                                                {control.invoice_url ? (
-                                                    <Button
-                                                        size="small"
-                                                        variant="text"
-                                                        startIcon={<ReceiptOutlined />}
-                                                        onClick={() => handleViewInvoice(control.invoice_url)}
-                                                    >
-                                                        Ver Albarán
-                                                    </Button>
-                                                ) : control.report ? (
-                                                    control.report_deleted ? (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                Reporte #{control.report}
-                                                            </Typography>
-                                                            <Chip
-                                                                label="Eliminado"
-                                                                size="small"
-                                                                color="default"
-                                                                variant="outlined"
-                                                                sx={{ fontSize: '0.65rem' }}
-                                                            />
-                                                        </Box>
-                                                    ) : (
-                                                        <Link 
-                                                            component={RouterLink} 
-                                                            to={`/dashboard/reports/${control.report}`}
-                                                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                                                        >
-                                                            <AssignmentIcon fontSize="small" />
-                                                            Reporte #{control.report}
-                                                        </Link>
-                                                    )
-                                                ) : control.ticket ? (
-                                                    control.ticket_canceled ? (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                Ticket #{control.ticket}
-                                                            </Typography>
-                                                            <Chip
-                                                                label="Cancelado"
-                                                                size="small"
-                                                                color="error"
-                                                                variant="outlined"
-                                                                sx={{ fontSize: '0.65rem' }}
-                                                            />
-                                                        </Box>
-                                                    ) : (
-                                                        <Link 
-                                                            component={RouterLink} 
-                                                            to={`/dashboard/tickets/${control.ticket}`}
-                                                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                                                        >
-                                                            <ReceiptIcon fontSize="small" />
-                                                            Ticket #{control.ticket}
-                                                        </Link>
-                                                    )
-                                                ) : (
-                                                    '-'
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-                <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    component="div"
-                    count={filteredControls.length}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={(e, newPage) => setPage(newPage)}
-                    onRowsPerPageChange={(e) => {
-                        setRowsPerPage(parseInt(e.target.value, 10));
-                        setPage(0);
-                    }}
-                    labelRowsPerPage="Filas por página:"
-                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-                />
+            <Paper sx={{ width: '100%' }}>
+                <Box sx={{ height: 600, width: '100%' }}>
+                    <DataGrid
+                        rows={filteredControls}
+                        columns={columns}
+                        initialState={{
+                            pagination: {
+                                paginationModel: { pageSize: 10, page: 0 },
+                            },
+                            sorting: {
+                                sortModel: [{ field: 'timestamp', sort: 'desc' }],
+                            },
+                        }}
+                        pageSizeOptions={[10, 25, 50]}
+                        disableRowSelectionOnClick
+                        loading={loading}
+                        autoHeight
+                        slots={{
+                            toolbar: GridToolbar,
+                            loadingOverlay: CustomLoadingOverlay,
+                        }}
+                        slotProps={{
+                            toolbar: {
+                                showQuickFilter: true,
+                                quickFilterProps: { debounceMs: 500 },
+                            },
+                        }}
+                        getRowId={(row) => row.id}
+                        localeText={localeText}
+                        sx={{
+                            border: '1px solid #E0E0E0',
+                            borderRadius: 1,
+                            '& .MuiDataGrid-row': {
+                                borderBottom: '1px solid #F5F5F5',
+                            },
+                            '& .MuiDataGrid-columnHeader': {
+                                backgroundColor: '#F5F5F5',
+                                borderRight: '1px solid #E0E0E0',
+                                '&:last-child': {
+                                    borderRight: 'none',
+                                },
+                            },
+                            '& .MuiDataGrid-cell': {
+                                borderRight: '1px solid #F5F5F5',
+                                '&:last-child': {
+                                    borderRight: 'none',
+                                },
+                                padding: '8px 16px'
+                            },
+                            '& .MuiDataGrid-columnHeaders': {
+                                borderBottom: '2px solid #E0E0E0',
+                                fontSize: '0.875rem',
+                                fontWeight: 'bold',
+                            },
+                            '& .MuiDataGrid-toolbarContainer': {
+                                borderBottom: '1px solid #E0E0E0',
+                                padding: '8px 16px',
+                            },
+                            '& .MuiDataGrid-footerContainer': {
+                                borderTop: '2px solid #E0E0E0',
+                            },
+                            '& .MuiDataGrid-virtualScroller': {
+                                backgroundColor: '#FFFFFF',
+                            },
+                            '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                                outline: 'none',
+                            },
+                        }}
+                    />
+                </Box>
             </Paper>
 
             {/* Diálogo para mostrar la imagen del albarán */}
