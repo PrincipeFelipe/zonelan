@@ -30,11 +30,8 @@ const Login = () => {
             const result = await authService.login(values);
             
             if (result) {
-                // Asegurar que la redirección ocurra después de que authService.login se complete
-                console.log('Login exitoso, redirigiendo al dashboard...');
-                setTimeout(() => {
-                    navigate('/dashboard');
-                }, 100); // Pequeño retraso para asegurar que los estados se actualicen
+                // Usar window.location para forzar una redirección completa
+                window.location.href = '/dashboard';
             } else {
                 setError('Credenciales inválidas');
             }

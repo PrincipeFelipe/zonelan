@@ -1,38 +1,45 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../components/auth/Login';
+import Register from '../components/auth/Register';
 import Dashboard from '../components/dashboard/Dashboard';
-import UserList from '../components/users/UserList';
-import PrivateRoute from '../components/auth/PrivateRoute';
-import CustomerList from '../components/customers/CustomerList';
-import MaterialList from '../components/materials/MaterialList';
-import IncidentList from '../components/incidents/IncidentList';
-import IncidentDetail from '../components/incidents/IncidentDetail';
-import ReportRoutes from '../components/reports/ReportRoutes';
+import RequireAuth from '../components/auth/RequireAuth';
+import DashboardHome from '../components/dashboard/DashboardHome';
+import IncidentRoutes from './IncidentRoutes';
 import MaterialRoutes from './MaterialRoutes';
+import ReportRoutes from './ReportRoutes';
 import TicketRoutes from './TicketRoutes';
+import CustomerRoutes from './CustomerRoutes';
+import UserRoutes from './UserRoutes'; // Importar las rutas de usuarios
 
 const AppRoutes = () => {
     return (
         <Router>
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                
+                {/* Rutas protegidas */}
                 <Route path="/dashboard" element={
-                    <PrivateRoute>
+                    <RequireAuth>
                         <Dashboard />
-                    </PrivateRoute>
+                    </RequireAuth>
                 }>
-                    <Route index element={<Navigate to="tickets" />} />
-                    <Route path="users" element={<UserList />} />
-                    <Route path="customers" element={<CustomerList />} />
+                    {/* Página principal del dashboard */}
+                    <Route path="" element={<DashboardHome />} />
+                    
+                    {/* Rutas anidadas */}
+                    <Route path="incidents/*" element={<IncidentRoutes />} />
                     <Route path="materials/*" element={<MaterialRoutes />} />
-                    <Route path="incidents" element={<IncidentList />} />
-                    <Route path="incidents/:id" element={<IncidentDetail />} />
-                    <Route path="incidents/:id/edit" element={<IncidentList />} />
                     <Route path="reports/*" element={<ReportRoutes />} />
                     <Route path="tickets/*" element={<TicketRoutes />} />
+                    <Route path="customers/*" element={<CustomerRoutes />} />
+                    <Route path="users/*" element={<UserRoutes />} /> {/* Añadir esta línea */}
                 </Route>
+                
+                {/* Redirección por defecto */}
                 <Route path="/" element={<Navigate to="/dashboard" />} />
+                <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>
         </Router>
     );

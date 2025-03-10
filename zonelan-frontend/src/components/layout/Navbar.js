@@ -52,7 +52,7 @@ const Navbar = () => {
         { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' },
         { label: 'Incidencias', path: '/dashboard/incidents', minRole: 'User' },
         { label: 'Partes', path: '/dashboard/reports', minRole: 'User' },
-        { label: 'Tickets', path: '/dashboard/tickets', minRole: 'User', icon: <ReceiptLong /> }, // Nuevo enlace a tickets
+        { label: 'Tickets', path: '/dashboard/tickets', minRole: 'User', icon: <ReceiptLong /> },
     ];
 
     const handleMenu = (event) => {
@@ -151,7 +151,20 @@ const Navbar = () => {
     return (
         <AppBar position="static">
             <Toolbar>
-                <Typography variant="h6" component="div" sx={{ flexGrow: 0, mr: 4 }}>
+                {/* Modificamos esta sección para hacer que el logo/nombre lleve al dashboard */}
+                <Typography 
+                    variant="h6" 
+                    component="div" 
+                    sx={{ 
+                        flexGrow: 0, 
+                        mr: 4,
+                        cursor: 'pointer',
+                        '&:hover': {
+                            opacity: 0.8
+                        }
+                    }}
+                    onClick={() => navigate('/dashboard')}
+                >
                     Zonelan
                 </Typography>
                 <Box sx={{ flexGrow: 1, display: 'flex' }}>
@@ -163,7 +176,7 @@ const Navbar = () => {
                             sx={{
                                 mr: 2,
                                 display: canAccess(item.minRole) ? 'block' : 'none',
-                                backgroundColor: location.pathname === item.path ? 'rgba(255,255,255,0.1)' : 'transparent'
+                                backgroundColor: location.pathname.startsWith(item.path) ? 'rgba(255,255,255,0.1)' : 'transparent'
                             }}
                         >
                             {item.label}
