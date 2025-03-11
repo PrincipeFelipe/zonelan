@@ -74,28 +74,96 @@ class MaterialLocationSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.ReadOnlyField(source='tray.shelf.department.warehouse.name')
     tray_full_code = serializers.ReadOnlyField(source='tray.get_full_code')
     
+    # Añadir este campo que será ignorado
+    code = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    
     class Meta:
         model = MaterialLocation
         fields = '__all__'
-        extra_kwargs = {
-            'code': {'required': False, 'allow_null': True, 'allow_blank': True}
-        }
-
-    def validate(self, attrs):
-        if 'code' not in attrs or attrs['code'] == "":
-            attrs['code'] = None
-        return attrs
+    
+    def create(self, validated_data):
+        # Eliminar 'code' si está presente antes de crear la instancia
+        if 'code' in validated_data:
+            validated_data.pop('code')
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # Eliminar 'code' si está presente antes de actualizar la instancia
+        if 'code' in validated_data:
+            validated_data.pop('code')
+        return super().update(instance, validated_data)
 
 
 class MaterialMovementSerializer(serializers.ModelSerializer):
     material_name = serializers.ReadOnlyField(source='material.name')
-    user_name = serializers.ReadOnlyField(source='user.username')
-    operation_display = serializers.CharField(source='get_operation_display', read_only=True)
+    operation_display = serializers.SerializerMethodField()
+    user_name = serializers.SerializerMethodField()
+    username = serializers.ReadOnlyField(source='user.username')  # Añadir el campo username
+    
+    # Añadir estos campos para origen
+    source_location_display = serializers.SerializerMethodField()
+    source_location_warehouse = serializers.SerializerMethodField()
+    
+    # Añadir estos campos para destino
+    target_location_display = serializers.SerializerMethodField()
+    target_location_warehouse = serializers.SerializerMethodField()
     
     class Meta:
         model = MaterialMovement
         fields = '__all__'
-        read_only_fields = ('timestamp',)
+    
+    def get_operation_display(self, obj):
+        return obj.get_operation_display()
+    
+    def get_user_name(self, obj):
+        if obj.user:
+            return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+        return "---"
+    
+    # Método para obtener el display del origen
+    def get_source_location_display(self, obj):
+        if not obj.source_location:
+            return None
+        
+        tray = obj.source_location.tray
+        shelf = tray.shelf
+        department = shelf.department
+        warehouse = department.warehouse
+        
+        return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+    
+    # Método para obtener el almacén de origen
+    def get_source_location_warehouse(self, obj):
+        if not obj.source_location:
+            return None
+        return obj.source_location.tray.shelf.department.warehouse.id
+    
+    # Método para obtener el display del destino
+    def get_target_location_display(self, obj):
+        if obj.target_location:
+            tray = obj.target_location.tray
+            shelf = tray.shelf
+            department = shelf.department
+            warehouse = department.warehouse
+            
+            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+        elif obj.target_tray:
+            tray = obj.target_tray
+            shelf = tray.shelf
+            department = shelf.department
+            warehouse = department.warehouse
+            
+            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+        
+        return None
+    
+    # Método para obtener el almacén de destino
+    def get_target_location_warehouse(self, obj):
+        if obj.target_location:
+            return obj.target_location.tray.shelf.department.warehouse.id
+        elif obj.target_tray:
+            return obj.target_tray.shelf.department.warehouse.id
+        return None
 
 
 class NestedDepartmentSerializer(serializers.ModelSerializer):

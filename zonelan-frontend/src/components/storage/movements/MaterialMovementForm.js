@@ -1,3 +1,4 @@
+import authService from '../../../services/authService';
 import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, TextField, Button, Paper,
@@ -451,7 +452,21 @@ const MaterialMovementForm = () => {
     setError(null);
     
     try {
-      await createMaterialMovement(formData);
+      // Obtener el usuario actual
+      const currentUser = authService.getCurrentUser();
+      
+      if (!currentUser) {
+        setError('No hay usuario autenticado');
+        return;
+      }
+      
+      // Añadir el usuario a los datos del formulario
+      const movementDataWithUser = {
+        ...formData,
+        user: currentUser.id
+      };
+      
+      await createMaterialMovement(movementDataWithUser);
       toast.success('Movimiento registrado correctamente');
       navigate('/dashboard/storage/movements');
     } catch (error) {

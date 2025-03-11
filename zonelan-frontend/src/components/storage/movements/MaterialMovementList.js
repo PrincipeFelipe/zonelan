@@ -271,10 +271,17 @@ const MaterialMovementList = () => {
         if (params.row.operation === 'ADD') {
           return <Typography variant="body2" color="text.secondary">-</Typography>;
         }
+        
+        if (!params.row.source_location_display) {
+          return <Typography variant="body2" color="text.secondary">Sin origen</Typography>;
+        }
+        
         return (
-          <Typography variant="body2">
-            {params.row.source_location_display || '-'}
-          </Typography>
+          <Tooltip title={params.row.source_location_display || ''}>
+            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {params.row.source_location_display}
+            </Typography>
+          </Tooltip>
         );
       }
     },
@@ -287,17 +294,32 @@ const MaterialMovementList = () => {
         if (params.row.operation === 'REMOVE') {
           return <Typography variant="body2" color="text.secondary">-</Typography>;
         }
+        
+        if (!params.row.target_location_display) {
+          return <Typography variant="body2" color="text.secondary">Sin destino</Typography>;
+        }
+        
         return (
-          <Typography variant="body2">
-            {params.row.target_location_display || '-'}
-          </Typography>
+          <Tooltip title={params.row.target_location_display || ''}>
+            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {params.row.target_location_display}
+            </Typography>
+          </Tooltip>
         );
       }
     },
     {
       field: 'user_name',
       headerName: 'Usuario',
-      width: 150
+      width: 150,
+      renderCell: (params) => {
+        const username = params.row.username || params.row.user_name || 'Desconocido';
+        return (
+          <Typography variant="body2">
+            {username}
+          </Typography>
+        );
+      }
     },
     {
       field: 'actions',

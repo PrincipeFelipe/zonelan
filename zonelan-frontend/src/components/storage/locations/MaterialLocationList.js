@@ -4,7 +4,7 @@ import {
   InputAdornment, Grid, FormControl, InputLabel,
   Select, MenuItem, IconButton, Tooltip, Chip,
   LinearProgress, Dialog, DialogTitle, DialogContent,
-  DialogActions
+  DialogActions, CircularProgress, Alert
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import {
@@ -66,6 +66,14 @@ const MaterialLocationList = () => {
     minimum_quantity: 0
   });
   
+  // Añadir estos estados
+  const [stockInfo, setStockInfo] = useState({
+    totalStock: 0,
+    totalAllocated: 0,
+    availableStock: 0,
+    loading: false
+  });
+
   useEffect(() => {
     fetchLocations();
     fetchFilterData();
@@ -113,6 +121,30 @@ const MaterialLocationList = () => {
     }
   }, [lowStockParam]); // Añade lowStockParam como dependencia
   
+  // Añadir este efecto para cargar los datos de stock cuando cambia el material seleccionado
+  useEffect(() => {
+    // Solo cargar si hay un material seleccionado
+    if (formData.material) {
+      setStockInfo(prev => ({ ...prev, loading: true }));
+      verifyAvailableStock(formData.material)
+        .then(info => {
+          setStockInfo({
+            ...info,
+            loading: false
+          });
+        })
+        .catch(error => {
+          console.error("Error al obtener información de stock:", error);
+          setStockInfo({
+            totalStock: 0,
+            totalAllocated: 0,
+            availableStock: 0,
+            loading: false
+          });
+        });
+    }
+  }, [formData.material]);
+
   const fetchLocations = async () => {
     try {
       setLoading(true);
@@ -194,12 +226,23 @@ const MaterialLocationList = () => {
     });
   };
   
+  // Modificar handleFilterChange para que cuando se seleccione una balda,
+  // se actualice también el campo del formulario
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters({
       ...filters,
       [name]: value
     });
+    
+    // Si se selecciona una balda en la jerarquía, actualizarla también en formData
+    if (name === 'shelf' && value) {
+      // Resetear la bandeja en formData cuando cambia la estantería
+      setFormData(prev => ({
+        ...prev,
+        tray: ''
+      }));
+    }
   };
   
   const applyFilters = () => {
@@ -272,7 +315,9 @@ const MaterialLocationList = () => {
     fetchLocations();
   };
   
-  const handleOpenDialog = (location = null) => {
+  // Reemplazar la función handleOpenDialog existente con esta versión mejorada
+const handleOpenDialog = async (location = null) => {
+  try {
     if (location) {
       setEditingLocation(location);
       setFormData({
@@ -281,7 +326,32 @@ const MaterialLocationList = () => {
         quantity: location.quantity,
         minimum_quantity: location.minimum_quantity
       });
+      
+      // Obtener información detallada de la balda para establecer la jerarquía
+      const trayResponse = await axios.get(`/storage/trays/${location.tray}/`);
+      const trayData = trayResponse.data;
+      
+      // Obtener info de la estantería
+      const shelfResponse = await axios.get(`/storage/shelves/${trayData.shelf}/`);
+      const shelfData = shelfResponse.data;
+      
+      // Obtener info del departamento
+      const departmentResponse = await axios.get(`/storage/departments/${shelfData.department}/`);
+      const departmentData = departmentResponse.data;
+      
+      // Establecer los valores seleccionados en orden jerárquico
+      const warehouseId = departmentData.warehouse;
+      setFilters(prev => ({ ...prev, warehouse: warehouseId }));
+      await fetchDepartments(warehouseId);
+      
+      setFilters(prev => ({ ...prev, department: shelfData.department }));
+      await fetchShelves(shelfData.department);
+      
+      setFilters(prev => ({ ...prev, shelf: trayData.shelf }));
+      await fetchTrays(trayData.shelf);
+      
     } else {
+      // Resetear todo para una nueva ubicación
       setEditingLocation(null);
       setFormData({
         material: '',
@@ -289,9 +359,27 @@ const MaterialLocationList = () => {
         quantity: 0,
         minimum_quantity: 0
       });
+      
+      // Resetear los filtros/selectores jerárquicos
+      setFilters(prev => ({ 
+        ...prev, 
+        warehouse: '', 
+        department: '', 
+        shelf: '', 
+        tray: '' 
+      }));
+      
+      setDepartments([]);
+      setShelves([]);
+      setTrays([]);
     }
+    
     setOpenDialog(true);
-  };
+  } catch (error) {
+    console.error('Error al preparar el diálogo de ubicación:', error);
+    toast.error('Error al cargar los datos para la edición');
+  }
+};
   
   const handleCloseDialog = () => {
     setOpenDialog(false);
@@ -318,15 +406,34 @@ const MaterialLocationList = () => {
         return;
       }
       
-      if (formData.quantity < 0) {
-        toast.error('La cantidad no puede ser negativa');
+      if (formData.quantity <= 0) {
+        toast.error('La cantidad debe ser mayor que cero');
         return;
       }
       
+      // Verificar stock disponible (nuevo)
+      const stockInfo = await verifyAvailableStock(formData.material);
+      
       if (editingLocation) {
+        // Si estamos editando, debemos considerar el stock actual
+        const currentStock = editingLocation.quantity || 0;
+        const requestedIncrease = formData.quantity - currentStock;
+        
+        // Si estamos aumentando la cantidad, verificar si hay stock disponible
+        if (requestedIncrease > 0 && requestedIncrease > stockInfo.availableStock) {
+          toast.error(`No hay suficiente stock disponible. Máximo incremento posible: ${stockInfo.availableStock}`);
+          return;
+        }
+        
         await updateMaterialLocation(editingLocation.id, formData);
         toast.success('Ubicación de material actualizada correctamente');
       } else {
+        // Si estamos creando, verificar si hay suficiente stock
+        if (formData.quantity > stockInfo.availableStock) {
+          toast.error(`No hay suficiente stock disponible. Máximo disponible: ${stockInfo.availableStock}`);
+          return;
+        }
+        
         await createMaterialLocation(formData);
         toast.success('Ubicación de material creada correctamente');
       }
@@ -369,6 +476,43 @@ const MaterialLocationList = () => {
       currency: 'EUR'
     }).format(amount || 0);
   };
+  
+  // Añadir esta función después de handleFilterChange
+const verifyAvailableStock = async (materialId) => {
+  try {
+    // Obtener información del material
+    const materialResponse = await axios.get(`/materials/materials/${materialId}/`);
+    const material = materialResponse.data;
+    
+    // Obtener todas las ubicaciones existentes para este material
+    const locationsResponse = await getMaterialLocations({ material: materialId });
+    const materialLocations = Array.isArray(locationsResponse) ? locationsResponse : [];
+    
+    // Calcular el total ya ubicado
+    const totalAllocated = materialLocations.reduce((sum, location) => {
+      // Si estamos editando, excluir la ubicación actual del cálculo
+      if (editingLocation && location.id === editingLocation.id) {
+        return sum;
+      }
+      return sum + location.quantity;
+    }, 0);
+    
+    // Stock total del material
+    const totalStock = material.quantity || 0;
+    
+    // Stock disponible = total - ubicado
+    const availableStock = totalStock - totalAllocated;
+    
+    return {
+      totalStock,
+      totalAllocated,
+      availableStock
+    };
+  } catch (error) {
+    console.error("Error al verificar stock disponible:", error);
+    throw error;
+  }
+};
   
   // Componente para el overlay de carga
   const CustomLoadingOverlay = () => (
@@ -830,7 +974,7 @@ const MaterialLocationList = () => {
       </Paper>
 
       {/* Diálogo para añadir/editar ubicación */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingLocation ? 'Editar Ubicación' : 'Nueva Ubicación'}
         </DialogTitle>
@@ -845,6 +989,7 @@ const MaterialLocationList = () => {
                     value={formData.material}
                     label="Material *"
                     onChange={handleInputChange}
+                    disabled={editingLocation} // Desactivar cambio de material al editar
                   >
                     {materials.map((material) => (
                       <MenuItem key={material.id} value={material.id}>
@@ -853,10 +998,113 @@ const MaterialLocationList = () => {
                     ))}
                   </Select>
                 </FormControl>
+                
+                {/* Añadir información de stock */}
+                {formData.material && (
+                  <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                    {stockInfo.loading ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          Cargando información de stock...
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Grid container spacing={1}>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Stock total:</Typography>
+                          <Typography variant="body2" fontWeight="medium">{stockInfo.totalStock}</Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Ya ubicado:</Typography>
+                          <Typography variant="body2" fontWeight="medium">{stockInfo.totalAllocated}</Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary">Disponible:</Typography>
+                          <Typography 
+                            variant="body2" 
+                            fontWeight="medium"
+                            color={stockInfo.availableStock <= 0 ? 'error.main' : 'success.main'}
+                          >
+                            {stockInfo.availableStock}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    )}
+                  </Box>
+                )}
+                {formData.material && !stockInfo.loading && stockInfo.availableStock <= 0 && !editingLocation && (
+                  <Box sx={{ mt: 1 }}>
+                    <Alert severity="error">
+                      No hay stock disponible para ubicar. Todo el stock de este material ya está asignado a ubicaciones.
+                    </Alert>
+                  </Box>
+                )}
               </Grid>
               
-              <Grid item xs={12}>
+              {/* Selector de almacén */}
+              <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
+                  <InputLabel>Almacén</InputLabel>
+                  <Select
+                    name="warehouse"
+                    value={filters.warehouse}
+                    label="Almacén *"
+                    onChange={handleFilterChange}
+                  >
+                    <MenuItem value="">Seleccione un almacén</MenuItem>
+                    {warehouses.map((warehouse) => (
+                      <MenuItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Selector de departamento */}
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required disabled={!filters.warehouse}>
+                  <InputLabel>Dependencia</InputLabel>
+                  <Select
+                    name="department"
+                    value={filters.department}
+                    label="Dependencia *"
+                    onChange={handleFilterChange}
+                  >
+                    <MenuItem value="">Seleccione una dependencia</MenuItem>
+                    {departments.map((department) => (
+                      <MenuItem key={department.id} value={department.id}>
+                        {department.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Selector de estantería */}
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required disabled={!filters.department}>
+                  <InputLabel>Estantería</InputLabel>
+                  <Select
+                    name="shelf"
+                    value={filters.shelf}
+                    label="Estantería *"
+                    onChange={handleFilterChange}
+                  >
+                    <MenuItem value="">Seleccione una estantería</MenuItem>
+                    {shelves.map((shelf) => (
+                      <MenuItem key={shelf.id} value={shelf.id}>
+                        {shelf.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Selector de balda */}
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required disabled={!filters.shelf}>
                   <InputLabel>Balda</InputLabel>
                   <Select
                     name="tray"
@@ -864,15 +1112,17 @@ const MaterialLocationList = () => {
                     label="Balda *"
                     onChange={handleInputChange}
                   >
+                    <MenuItem value="">Seleccione una balda</MenuItem>
                     {trays.map((tray) => (
                       <MenuItem key={tray.id} value={tray.id}>
-                        {`${tray.name} (${tray.tray_full_code || 'Sin código'})`}
+                        {`${tray.name} ${tray.full_code ? `(${tray.full_code})` : ''}`}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
               
+              {/* En el campo TextField de quantity */}
               <Grid item xs={12} md={6}>
                 <TextField
                   name="quantity"
@@ -881,7 +1131,25 @@ const MaterialLocationList = () => {
                   fullWidth
                   value={formData.quantity}
                   onChange={handleInputChange}
-                  InputProps={{ inputProps: { min: 0 } }}
+                  InputProps={{ 
+                    inputProps: { 
+                      min: 0, 
+                      max: editingLocation 
+                        ? stockInfo.availableStock + (editingLocation.quantity || 0) 
+                        : stockInfo.availableStock 
+                    }
+                  }}
+                  disabled={stockInfo.availableStock <= 0 && !editingLocation}
+                  helperText={
+                    editingLocation 
+                      ? `Disponible para añadir: ${stockInfo.availableStock}` 
+                      : `Máximo disponible: ${stockInfo.availableStock}`
+                  }
+                  error={
+                    editingLocation 
+                      ? formData.quantity - (editingLocation.quantity || 0) > stockInfo.availableStock
+                      : formData.quantity > stockInfo.availableStock
+                  }
                 />
               </Grid>
               
@@ -905,6 +1173,16 @@ const MaterialLocationList = () => {
           <Button 
             variant="contained" 
             onClick={handleSubmit}
+            disabled={
+              !formData.material || 
+              !formData.tray || 
+              formData.quantity <= 0 ||
+              (!editingLocation && stockInfo.availableStock <= 0) ||
+              (editingLocation 
+                ? formData.quantity - (editingLocation.quantity || 0) > stockInfo.availableStock
+                : formData.quantity > stockInfo.availableStock
+              )
+            }
           >
             {editingLocation ? 'Actualizar' : 'Crear'}
           </Button>

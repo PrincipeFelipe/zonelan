@@ -1,7 +1,13 @@
 import axios from '../utils/axiosConfig';
 
-// Crear un helper para añadir el campo code a todas las peticiones
+// Modificar el helper addCodeIfMissing para que no añada code a las ubicaciones
 const addCodeIfMissing = (data) => {
+  // Si es una petición para MaterialLocation, no añadir campo code
+  if (data.material && data.tray && 'quantity' in data) {
+    return { ...data };
+  }
+  
+  // Para otras entidades que sí requieren code
   return {
     ...data,
     code: data.code === undefined ? "" : data.code
@@ -160,8 +166,20 @@ export const getLowStockLocations = async () => {
 };
 
 export const createMaterialLocation = async (locationData) => {
-  const response = await axios.post('/storage/locations/', addCodeIfMissing(locationData));
-  return response.data;
+  try {
+    // Eliminar explícitamente el campo code si existe
+    const dataToSend = { ...locationData };
+    if ('code' in dataToSend) {
+      delete dataToSend.code;
+    }
+    
+    console.log("Enviando datos de ubicación:", dataToSend);
+    const response = await axios.post('/storage/locations/', dataToSend);
+    return response.data;
+  } catch (error) {
+    console.error("Error al crear ubicación de material:", error);
+    throw error;
+  }
 };
 
 export const updateMaterialLocation = async (id, data) => {

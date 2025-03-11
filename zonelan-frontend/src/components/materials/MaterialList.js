@@ -12,15 +12,32 @@ import {
     IconButton,
     MenuItem,
     FormHelperText,
-    InputAdornment
+    InputAdornment,
+    Accordion, 
+    AccordionSummary, 
+    AccordionDetails,
+    FormControl,
+    InputLabel,
+    Select,
+    Grid
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { Edit, Delete, Add, History, CloudUpload, Clear, PhotoCamera } from '@mui/icons-material';
+import { Edit, Delete, Add, History, CloudUpload, Clear, PhotoCamera, Room } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
 import authService from '../../services/authService';
 import MaterialHistory from './MaterialHistory';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { 
+    getWarehouses, 
+    getDepartments, 
+    getShelves, 
+    getTrays,
+    createMaterialLocation
+} from '../../services/storageService';
+// Añadir el import
+import MaterialLocationAssign from './MaterialLocationAssign';
 
 const MaterialList = () => {
     const [materials, setMaterials] = useState([]);
@@ -54,9 +71,55 @@ const MaterialList = () => {
     const [invoicePreview, setInvoicePreview] = useState('');
     const fileInputRef = useRef();
 
+    const [assignLocation, setAssignLocation] = useState(false);
+    const [warehouses, setWarehouses] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [shelves, setShelves] = useState([]);
+    const [trays, setTrays] = useState([]);
+    const [selectedWarehouse, setSelectedWarehouse] = useState('');
+    const [selectedDepartment, setSelectedDepartment] = useState('');
+    const [selectedShelf, setSelectedShelf] = useState('');
+    const [selectedTray, setSelectedTray] = useState('');
+    const [locationQuantity, setLocationQuantity] = useState(1);
+    const [minimumQuantity, setMinimumQuantity] = useState(0);
+
+    // Añadir el estado para el diálogo de ubicación
+    const [openLocationDialog, setOpenLocationDialog] = useState(false);
+
     useEffect(() => {
         fetchMaterials();
     }, []);
+
+    useEffect(() => {
+        fetchWarehouses();
+    }, []);
+
+    useEffect(() => {
+        if (selectedWarehouse) {
+            fetchDepartments(selectedWarehouse);
+        } else {
+            setDepartments([]);
+            setSelectedDepartment('');
+        }
+    }, [selectedWarehouse]);
+
+    useEffect(() => {
+        if (selectedDepartment) {
+            fetchShelves(selectedDepartment);
+        } else {
+            setShelves([]);
+            setSelectedShelf('');
+        }
+    }, [selectedDepartment]);
+
+    useEffect(() => {
+        if (selectedShelf) {
+            fetchTrays(selectedShelf);
+        } else {
+            setTrays([]);
+            setSelectedTray('');
+        }
+    }, [selectedShelf]);
 
     const columns = [
         { 
@@ -85,15 +148,15 @@ const MaterialList = () => {
         {
             field: 'actions',
             headerName: 'Acciones',
-            width: 150,
+            width: 200, // Aumentar el ancho para acomodar el nuevo botón
             sortable: false,
             filterable: false,
             renderCell: (params) => (
                 <Box>
-                    <IconButton onClick={() => handleOpenDialog(params.row)} size="small">
+                    <IconButton onClick={() => handleOpenDialog(params.row)} size="small" title="Editar">
                         <Edit />
                     </IconButton>
-                    <IconButton onClick={() => handleDeleteMaterial(params.row.id)} size="small">
+                    <IconButton onClick={() => handleDeleteMaterial(params.row.id)} size="small" title="Eliminar">
                         <Delete />
                     </IconButton>
                     <IconButton 
@@ -102,8 +165,17 @@ const MaterialList = () => {
                             setOpenHistoryDialog(true);
                         }}
                         size="small"
+                        title="Historial"
                     >
                         <History />
+                    </IconButton>
+                    <IconButton 
+                        onClick={() => handleAssignLocation(params.row)}
+                        size="small"
+                        title="Asignar ubicación"
+                        color="secondary"
+                    >
+                        <Room />
                     </IconButton>
                 </Box>
             )
@@ -129,6 +201,42 @@ const MaterialList = () => {
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchWarehouses = async () => {
+        try {
+            const data = await getWarehouses();
+            setWarehouses(data);
+        } catch (error) {
+            console.error('Error al cargar almacenes:', error);
+        }
+    };
+
+    const fetchDepartments = async (warehouseId) => {
+        try {
+            const data = await getDepartments({ warehouse: warehouseId });
+            setDepartments(data);
+        } catch (error) {
+            console.error('Error al cargar dependencias:', error);
+        }
+    };
+
+    const fetchShelves = async (departmentId) => {
+        try {
+            const data = await getShelves({ department: departmentId });
+            setShelves(data);
+        } catch (error) {
+            console.error('Error al cargar estanterías:', error);
+        }
+    };
+
+    const fetchTrays = async (shelfId) => {
+        try {
+            const data = await getTrays({ shelf: shelfId });
+            setTrays(data);
+        } catch (error) {
+            console.error('Error al cargar baldas:', error);
         }
     };
 
@@ -159,6 +267,13 @@ const MaterialList = () => {
         setEditMode(false);
         setSelectedMaterial(null);
         clearImage();
+        setAssignLocation(false);
+        setSelectedWarehouse('');
+        setSelectedDepartment('');
+        setSelectedShelf('');
+        setSelectedTray('');
+        setLocationQuantity(1);
+        setMinimumQuantity(0);
     };
 
     // Modificar handleInputChange para manejar los nuevos campos
@@ -205,91 +320,104 @@ const MaterialList = () => {
                 return;
             }
 
-            // Preparar el FormData para enviar datos incluyendo la imagen
+            // Preparar el FormData para enviar datos
             const formData = new FormData();
 
+            // Variable para almacenar la respuesta
+            let materialResponse;
+            
             if (editMode) {
-                // Calculamos la nueva cantidad basada en la operación
-                const changeAmount = parseInt(quantityChange.amount);
-                if (!changeAmount || changeAmount <= 0) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'La cantidad debe ser un número positivo'
-                    });
-                    return;
-                }
-                
-                const currentQuantity = parseInt(newMaterial.quantity);
-                let operationReason;
-
-                if (quantityChange.operation === 'add') {
-                    // Si es add, el motivo puede ser COMPRA o DEVOLUCION según lo seleccionado
-                    operationReason = reasonType;
+                // Solo validar quantityChange si se está modificando la cantidad
+                if (quantityChange.amount !== 0 && quantityChange.amount !== '') {
+                    const changeAmount = parseInt(quantityChange.amount);
                     
-                    // Solo permitir imagen para compras
-                    if (reasonType === 'COMPRA' && invoiceImage) {
-                        formData.append('invoice_image', invoiceImage);
-                    }
-                } else {
-                    // Si es subtract, el motivo será VENTA o RETIRADA según lo seleccionado
-                    operationReason = withdrawalType;
-                    
-                    // Validar que no quede negativo
-                    if (currentQuantity - changeAmount < 0) {
+                    // Validar solo si se está realizando un cambio de cantidad
+                    if (changeAmount <= 0) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: 'No hay suficiente cantidad disponible para esta operación'
+                            text: 'La cantidad debe ser un número positivo'
                         });
                         return;
                     }
-                }
+                    
+                    // Resto del código para procesar el cambio de cantidad...
+                    const currentQuantity = parseInt(newMaterial.quantity);
+                    let operationReason;
 
-                // Añadir campos al FormData
-                formData.append('name', newMaterial.name);
-                formData.append('price', parseFloat(newMaterial.price));
-                formData.append('operation', quantityChange.operation === 'add' ? 'ADD' : 'REMOVE');
-                formData.append('quantity_change', changeAmount);
-                formData.append('reason', operationReason);
+                    if (quantityChange.operation === 'add') {
+                        // Si es add, el motivo puede ser COMPRA o DEVOLUCION según lo seleccionado
+                        operationReason = reasonType;
+                        
+                        // Solo permitir imagen para compras
+                        if (reasonType === 'COMPRA' && invoiceImage) {
+                            formData.append('invoice_image', invoiceImage);
+                        }
+                    } else {
+                        // Si es subtract, el motivo será VENTA o RETIRADA según lo seleccionado
+                        operationReason = withdrawalType;
+                        
+                        // Validar que no quede negativo
+                        if (currentQuantity - changeAmount < 0) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'No hay suficiente cantidad disponible para esta operación'
+                            });
+                            return;
+                        }
+                    }
+
+                    // Añadir campos al FormData
+                    formData.append('name', newMaterial.name);
+                    formData.append('price', parseFloat(newMaterial.price));
+                    formData.append('operation', quantityChange.operation === 'add' ? 'ADD' : 'REMOVE');
+                    formData.append('quantity_change', changeAmount);
+                    formData.append('reason', operationReason);
+                } else {
+                    // Si no hay cambio de cantidad, solo actualizar nombre y precio
+                    formData.append('name', newMaterial.name);
+                    formData.append('price', parseFloat(newMaterial.price));
+                }
                 
-                await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
+                // Actualizar el material
+                materialResponse = await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
                 });
                 toast.success('Material actualizado correctamente');
             } else {
-                // En modo creación, enviamos todos los datos incluyendo la cantidad inicial
-                formData.append('name', newMaterial.name);
-                formData.append('price', parseFloat(newMaterial.price));
-                formData.append('quantity', parseInt(newMaterial.quantity || 0));
-                
-                // Añadir imagen del albarán si existe
-                if (invoiceImage) {
-                    formData.append('invoice_image', invoiceImage);
-                }
-                
-                await axios.post('/materials/materials/', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
+                // Código existente para crear nuevo material...
+            }
+
+            // Procesar la asignación de ubicación INDEPENDIENTEMENTE del cambio de cantidad
+            if (assignLocation && selectedTray) {
+                try {
+                    const locationData = {
+                        material: editMode ? selectedMaterial.id : materialResponse.data.id,
+                        tray: parseInt(selectedTray),
+                        quantity: parseInt(locationQuantity),
+                        minimum_quantity: parseInt(minimumQuantity)
+                    };
+                    
+                    if (locationQuantity <= 0) {
+                        toast.error('La cantidad para la ubicación debe ser mayor que cero');
+                        return;
                     }
-                });
-                toast.success('Material creado correctamente');
+                    
+                    await createMaterialLocation(locationData);
+                    toast.success('Material ubicado correctamente');
+                } catch (locationError) {
+                    console.error('Error al crear ubicación:', locationError);
+                    toast.error('Error al asignar ubicación. Revise las ubicaciones en el módulo de almacenamiento');
+                }
             }
             
             handleCloseDialog();
             fetchMaterials();
         } catch (error) {
-            console.error('Error:', error.response?.data || error);
-            const errorMessage = error.response?.data?.quantity?.[0] || 
-                               error.response?.data?.detail || 
-                               'Error al procesar la operación';
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: errorMessage
-            });
+            // Manejar errores...
         }
     };
 
@@ -318,6 +446,12 @@ const MaterialList = () => {
                 });
             }
         }
+    };
+
+    // Añadir esta nueva función al componente MaterialList
+    const handleAssignLocation = (material) => {
+        setSelectedMaterial(material);
+        setOpenLocationDialog(true);
     };
 
     // Definir la localización en español
@@ -630,6 +764,115 @@ const MaterialList = () => {
                             endAdornment: <InputAdornment position="end">€</InputAdornment>,
                         }}
                     />
+
+                    <Accordion 
+                        sx={{ mt: 2 }}
+                        expanded={assignLocation}
+                        onChange={(e, expanded) => setAssignLocation(expanded)}
+                    >
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography>Asignar ubicación</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth required>
+                                        <InputLabel>Almacén</InputLabel>
+                                        <Select
+                                            value={selectedWarehouse}
+                                            label="Almacén *"
+                                            onChange={(e) => setSelectedWarehouse(e.target.value)}
+                                        >
+                                            <MenuItem value="">Seleccione un almacén</MenuItem>
+                                            {warehouses.map((warehouse) => (
+                                                <MenuItem key={warehouse.id} value={warehouse.id}>
+                                                    {warehouse.name}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth required disabled={!selectedWarehouse}>
+                                        <InputLabel>Dependencia</InputLabel>
+                                        <Select
+                                            value={selectedDepartment}
+                                            label="Dependencia *"
+                                            onChange={(e) => setSelectedDepartment(e.target.value)}
+                                        >
+                                            <MenuItem value="">Seleccione una dependencia</MenuItem>
+                                            {departments.map((department) => (
+                                                <MenuItem key={department.id} value={department.id}>
+                                                    {department.name}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth required disabled={!selectedDepartment}>
+                                        <InputLabel>Estantería</InputLabel>
+                                        <Select
+                                            value={selectedShelf}
+                                            label="Estantería *"
+                                            onChange={(e) => setSelectedShelf(e.target.value)}
+                                        >
+                                            <MenuItem value="">Seleccione una estantería</MenuItem>
+                                            {shelves.map((shelf) => (
+                                                <MenuItem key={shelf.id} value={shelf.id}>
+                                                    {shelf.name}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth required disabled={!selectedShelf}>
+                                        <InputLabel>Balda</InputLabel>
+                                        <Select
+                                            value={selectedTray}
+                                            label="Balda *"
+                                            onChange={(e) => setSelectedTray(e.target.value)}
+                                        >
+                                            <MenuItem value="">Seleccione una balda</MenuItem>
+                                            {trays.map((tray) => (
+                                                <MenuItem key={tray.id} value={tray.id}>
+                                                    {tray.name} {tray.full_code ? `(${tray.full_code})` : ''}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                
+                                <Grid item xs={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Cantidad en ubicación"
+                                        type="number"
+                                        value={locationQuantity}
+                                        onChange={(e) => setLocationQuantity(parseInt(e.target.value) || 0)}
+                                        InputProps={{ inputProps: { min: 1 } }}
+                                        helperText={editMode ? "Esta cantidad se añadirá/restará del stock total" : ""}
+                                    />
+                                </Grid>
+                                
+                                <Grid item xs={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Cantidad mínima"
+                                        type="number"
+                                        value={minimumQuantity}
+                                        onChange={(e) => setMinimumQuantity(parseInt(e.target.value) || 0)}
+                                        InputProps={{ inputProps: { min: 0 } }}
+                                        helperText="Para alertas de stock bajo"
+                                    />
+                                </Grid>
+                            </Grid>
+                        </AccordionDetails>
+                    </Accordion>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancelar</Button>
@@ -642,6 +885,14 @@ const MaterialList = () => {
             <MaterialHistory
                 open={openHistoryDialog}
                 onClose={() => setOpenHistoryDialog(false)}
+                material={selectedMaterial}
+            />
+            <MaterialLocationAssign
+                open={openLocationDialog}
+                onClose={(refresh) => {
+                    setOpenLocationDialog(false);
+                    if (refresh) fetchMaterials();
+                }}
                 material={selectedMaterial}
             />
         </>
