@@ -12,6 +12,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axiosConfig';
+import { toast, Toaster } from 'react-hot-toast';
 
 const DashboardHome = () => {
     const [loading, setLoading] = useState(true);
@@ -31,36 +32,79 @@ const DashboardHome = () => {
         try {
             setLoading(true);
             
-            // Aquí podrías hacer llamadas a la API para obtener estadísticas
-            // Ejemplo simplificado:
-            const incidentsResponse = await axios.get('/incidents/counts/');
-            const materialsResponse = await axios.get('/materials/stats/');
+            // Peticiones para todas las estadísticas con manejo de errores
+            const [incidentsData, materialsData, reportsData, ticketsData] = await Promise.allSettled([
+              axios.get('/incidents/counts/').catch(err => {
+                console.warn('Error al obtener estadísticas de incidencias:', err);
+                return { data: { total: 0, pending: 0 } };
+              }),
+              axios.get('/materials/stats/').catch(err => {
+                console.warn('Error al obtener estadísticas de materiales:', err);
+                return { status: 'rejected' };
+              }),
+              axios.get('/reports/counts/').catch(err => {
+                console.warn('Error al obtener estadísticas de reportes:', err);
+                return { data: { total: 0, draft: 0 } };
+              }),
+              axios.get('/tickets/counts/').catch(err => {
+                console.warn('Error al obtener estadísticas de tickets:', err);
+                return { data: { total: 0, pending: 0 } };
+              })
+            ]);
             
-            // Actualizar con datos reales o simular por ahora
+            // Procesar estadísticas de incidentes
+            const incidentsStats = incidentsData.status === 'fulfilled' 
+              ? incidentsData.value.data 
+              : { total: 0, pending: 0 };
+              
+            // Procesar estadísticas de materiales
+            let materialsStats = { total: 0, lowStock: 0 };
+            if (materialsData.status === 'fulfilled') {
+              materialsStats = {
+                total: materialsData.value.data.total || 0,
+                lowStock: materialsData.value.data.lowStock || 0,
+                recentOperations: materialsData.value.data.recentOperations || 0
+              };
+            } else {
+              // Calcular manualmente si falló la API
+              try {
+                const materialsListResponse = await axios.get('/materials/materials/');
+                const materials = materialsListResponse.data;
+                materialsStats = {
+                  total: materials.length,
+                  lowStock: materials.filter(m => m.quantity <= (m.minimum_quantity || 0)).length,
+                  recentOperations: 0 // No podemos calcular esto sin la API
+                };
+              } catch (materialListError) {
+                console.error("Error obteniendo lista de materiales", materialListError);
+              }
+            }
+            
+            // Procesar estadísticas de reportes y tickets
+            // CORRECCIÓN: Usar reportsData en lugar de reportsStats
+            const reportsStats = reportsData.status === 'fulfilled' 
+              ? reportsData.value.data 
+              : { total: 0, draft: 0 };
+              
+            // CORRECCIÓN: Usar ticketsData en lugar de ticketsStats
+            const ticketsStats = ticketsData.status === 'fulfilled' 
+              ? ticketsData.value.data 
+              : { total: 0, pending: 0 };
+            
+            // Actualizar estado
             setStats({
-                incidents: {
-                    total: incidentsResponse.data.total || 0,
-                    pending: incidentsResponse.data.pending || 0
-                },
-                reports: {
-                    total: 0, // Obtener de API cuando esté disponible
-                    draft: 0
-                },
-                materials: {
-                    total: materialsResponse.data.total || 0,
-                    lowStock: materialsResponse.data.low_stock || 0
-                },
-                tickets: {
-                    total: 0, // Obtener de API cuando esté disponible
-                    pending: 0
-                }
+              incidents: incidentsStats,
+              materials: materialsStats,
+              reports: reportsStats,
+              tickets: ticketsStats
             });
             
-        } catch (error) {
+          } catch (error) {
             console.error("Error al cargar datos del dashboard:", error);
-        } finally {
+            toast.error('Error al cargar datos del dashboard');
+          } finally {
             setLoading(false);
-        }
+          }
     };
 
     const handleNavigate = (path) => {
@@ -77,6 +121,7 @@ const DashboardHome = () => {
 
     return (
         <Box>
+            <Toaster position="top-right" /> {/* Añadir esta línea */}
             <Typography variant="h5" gutterBottom>
                 Panel de Control
             </Typography>
@@ -97,7 +142,10 @@ const DashboardHome = () => {
                                 <Typography variant="h6">Incidencias</Typography>
                             </Box>
                             <Typography variant="body2" color="text.secondary">
-                                Incidencias pendientes: <strong>{stats.incidents.pending}</strong>
+                                Incidencias pendientes: <strong>
+                                    {stats.incidents.active || 
+                                     (stats.incidents.pending + (stats.incidents.in_progress || 0))}
+                                </strong>
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                                 Total de incidencias: {stats.incidents.total}
@@ -150,6 +198,11 @@ const DashboardHome = () => {
                             <Typography variant="body2" color="text.secondary">
                                 Total de materiales: {stats.materials.total}
                             </Typography>
+                            {stats.materials.recentOperations > 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    Operaciones recientes: {stats.materials.recentOperations}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>

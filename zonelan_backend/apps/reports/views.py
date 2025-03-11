@@ -8,6 +8,7 @@ from django.db import transaction
 from .models import WorkReport, MaterialUsed, ReportImage
 from .serializers import WorkReportSerializer, MaterialUsedSerializer
 from apps.materials.models import Material, MaterialControl
+from django.db.models import Count
 
 class WorkReportViewSet(viewsets.ModelViewSet):
     queryset = WorkReport.objects.filter(is_deleted=False)
@@ -154,3 +155,22 @@ def delete_image(request, image_id):
         return Response({"detail": "Imagen no encontrada."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def report_counts(request):
+    """Devuelve estadísticas de reportes para el dashboard"""
+    try:
+        total = WorkReport.objects.filter(is_deleted=False).count()
+        draft = WorkReport.objects.filter(status='DRAFT', is_deleted=False).count()
+        completed = WorkReport.objects.filter(status='COMPLETED', is_deleted=False).count()
+        
+        return Response({
+            'total': total,
+            'draft': draft,
+            'completed': completed
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error en report_counts: {str(e)}")
+        print(traceback.format_exc())
+        return Response({"error": str(e)}, status=500)

@@ -50,6 +50,7 @@ const Navbar = () => {
         { label: 'Clientes', path: '/dashboard/customers', minRole: 'User' },
         { label: 'Materiales', path: '/dashboard/materials', minRole: 'User' },
         { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' },
+        { label: 'Almacenamiento', path: '/dashboard/storage', minRole: 'Gestor' },
         { label: 'Incidencias', path: '/dashboard/incidents', minRole: 'User' },
         { label: 'Partes', path: '/dashboard/reports', minRole: 'User' },
         { label: 'Tickets', path: '/dashboard/tickets', minRole: 'User', icon: <ReceiptLong /> },
@@ -114,8 +115,9 @@ const Navbar = () => {
     // Función para obtener conteo de incidencias
     const fetchIncidentsCount = async () => {
         try {
-            const counts = await incidentService.getPendingIncidentsCount();
-            setIncidentsCount(counts.total);
+            const data = await incidentService.getPendingIncidentsCount();
+            // Usar el contador de incidencias activas (suma de pendientes + en progreso)
+            setIncidentsCount(data.active || (data.pending + data.in_progress) || 0);
         } catch (error) {
             console.error('Error al obtener conteo de incidencias:', error);
         }

@@ -48,7 +48,7 @@ const authService = {
                                 `,
                                 confirmButtonText: 'Entendido'
                             });
-                        }, 300); // Retraso de 300ms
+                        }, 10000); // Retraso de 300ms
                     }
                 } catch (countError) {
                     console.error('Error al obtener conteo de incidencias:', countError);

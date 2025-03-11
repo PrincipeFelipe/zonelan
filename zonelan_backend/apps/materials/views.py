@@ -7,6 +7,9 @@ from .models import Material, MaterialControl
 from .serializers import MaterialSerializer, MaterialControlSerializer
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import api_view
+from django.db.models import Count, Sum, F, Q
+from django.utils import timezone  # Añadir esta importación
+from apps.storage.models import MaterialLocation  # Añadir esta importación
 
 class MaterialViewSet(viewsets.ModelViewSet):
     queryset = Material.objects.all().order_by('name')
@@ -124,3 +127,32 @@ def material_history(request, material_id):
         return Response(serializer.data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def material_stats(request):
+    """Endpoint para devolver estadísticas de materiales para el dashboard"""
+    try:
+        # Total de materiales
+        total_materials = Material.objects.count()
+        
+        # Materiales con stock bajo (usando MaterialLocation donde está minimum_quantity)
+        low_stock_locations = MaterialLocation.objects.filter(
+            quantity__lt=F('minimum_quantity')
+        ).values('material').distinct().count()
+        
+        # Operaciones recientes (últimos 30 días)
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+        recent_operations = MaterialControl.objects.filter(
+            date__gte=thirty_days_ago
+        ).count()
+        
+        return Response({
+            'total': total_materials,
+            'lowStock': low_stock_locations,
+            'recentOperations': recent_operations
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error en material_stats: {str(e)}")
+        print(traceback.format_exc())
+        return Response({"error": str(e)}, status=500)

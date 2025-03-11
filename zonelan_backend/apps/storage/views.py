@@ -2,7 +2,8 @@ from django.shortcuts import render
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db import transaction
+from django.db import models, transaction
+from django.db.models import F
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import (
@@ -98,10 +99,17 @@ class MaterialLocationViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
-        """Retorna ubicaciones con stock bajo del mínimo establecido"""
-        locations = MaterialLocation.objects.filter(quantity__lt=models.F('minimum_quantity'))
-        serializer = self.get_serializer(locations, many=True)
-        return Response(serializer.data)
+        """
+        Devuelve las ubicaciones con stock por debajo del mínimo configurado
+        """
+        try:
+            locations = MaterialLocation.objects.filter(quantity__lt=F('minimum_quantity')).select_related(
+                'material', 'tray', 'tray__shelf', 'tray__shelf__department', 'tray__shelf__department__warehouse'
+            )
+            serializer = MaterialLocationSerializer(locations, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
 
 
 class MaterialMovementViewSet(viewsets.ModelViewSet):

@@ -5,7 +5,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import permissions
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from django.http import HttpResponse
@@ -407,3 +407,18 @@ def ticket_stats(request):
         'monthly_sales': monthly_sales,
         'total_sales_amount': total_sales_amount
     })
+
+
+@api_view(['GET'])
+def ticket_counts(request):
+    """Devuelve estadísticas de tickets para el dashboard"""
+    try:
+        total = Ticket.objects.count()
+        pending = Ticket.objects.filter(status__in=['PENDING', 'IN_PROGRESS']).count()
+        
+        return Response({
+            'total': total,
+            'pending': pending
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)

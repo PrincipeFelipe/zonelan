@@ -41,16 +41,19 @@ class IncidentViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 def incident_counts(request):
     """
-    Retorna el número de incidencias pendientes y en progreso
+    Retorna estadísticas de incidencias: pendientes, en progreso y total
     """
     try:
         pending_count = Incident.objects.filter(status='PENDING').count()
         in_progress_count = Incident.objects.filter(status='IN_PROGRESS').count()
+        active_count = pending_count + in_progress_count
+        total_count = Incident.objects.count()
         
         return Response({
-            'pending': pending_count,
+            'pending': pending_count,  # Solo las pendientes
             'in_progress': in_progress_count,
-            'total': pending_count + in_progress_count
+            'active': active_count,    # Suma de pendientes + en progreso
+            'total': total_count       # Todas las incidencias
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

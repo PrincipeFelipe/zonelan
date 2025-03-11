@@ -9,4 +9,5 @@ router.register(r'control', views.MaterialControlViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('material-history/<int:material_id>/', views.material_history, name='material-history'),
+    path('stats/', views.material_stats, name='material-stats'),
 ]

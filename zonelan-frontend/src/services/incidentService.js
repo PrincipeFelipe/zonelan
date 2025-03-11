@@ -1,17 +1,27 @@
 import axios from '../utils/axiosConfig';
 
-let cachedCounts = { pending: 0, in_progress: 0, total: 0 };
+let cachedCounts = { pending: 0, in_progress: 0, active: 0, total: 0 };
 let subscribers = [];
 
 const incidentService = {
     getPendingIncidentsCount: async () => {
         try {
             const response = await axios.get('/incidents/counts/');
+            // Asegurar compatibilidad con código existente
+            const responseData = response.data;
+            
+            // Si el backend no proporciona 'active', calcularlo
+            if (responseData.pending !== undefined && responseData.in_progress !== undefined) {
+                if (responseData.active === undefined) {
+                    responseData.active = responseData.pending + responseData.in_progress;
+                }
+            }
+            
             // Actualizar el caché
-            cachedCounts = response.data;
+            cachedCounts = responseData;
             // Notificar a todos los suscriptores
-            subscribers.forEach(callback => callback(response.data));
-            return response.data;
+            subscribers.forEach(callback => callback(responseData));
+            return responseData;
         } catch (error) {
             console.error('Error al obtener el conteo de incidencias pendientes:', error);
             return cachedCounts;
