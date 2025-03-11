@@ -17,6 +17,14 @@ class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Department
         fields = '__all__'
+        extra_kwargs = {
+            'code': {'required': False, 'allow_null': True, 'allow_blank': True}
+        }
+    
+    def validate(self, attrs):
+        if 'code' not in attrs or attrs['code'] == "":
+            attrs['code'] = None
+        return attrs
 
 
 class ShelfSerializer(serializers.ModelSerializer):
@@ -26,17 +34,36 @@ class ShelfSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shelf
         fields = '__all__'
+        extra_kwargs = {
+            'code': {'required': False, 'allow_null': True, 'allow_blank': True}
+        }
+
+    def validate(self, attrs):
+        if 'code' not in attrs or attrs['code'] == "":
+            attrs['code'] = None
+        return attrs
 
 
 class TraySerializer(serializers.ModelSerializer):
     shelf_name = serializers.ReadOnlyField(source='shelf.name')
     department_name = serializers.ReadOnlyField(source='shelf.department.name')
     warehouse_name = serializers.ReadOnlyField(source='shelf.department.warehouse.name')
-    full_code = serializers.ReadOnlyField(source='get_full_code')
+    department_id = serializers.ReadOnlyField(source='shelf.department.id')
+    warehouse_id = serializers.ReadOnlyField(source='shelf.department.warehouse.id')
     
     class Meta:
         model = Tray
-        fields = '__all__'
+        fields = ['id', 'shelf', 'name', 'code', 'description', 'is_active', 
+                  'created_at', 'updated_at', 'shelf_name', 'department_name', 
+                  'warehouse_name', 'department_id', 'warehouse_id']
+        extra_kwargs = {
+            'code': {'required': False, 'allow_null': True, 'allow_blank': True}
+        }
+        
+    def validate(self, attrs):
+        if 'code' not in attrs or attrs['code'] == "":
+            attrs['code'] = None
+        return attrs
 
 
 class MaterialLocationSerializer(serializers.ModelSerializer):
@@ -50,6 +77,14 @@ class MaterialLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaterialLocation
         fields = '__all__'
+        extra_kwargs = {
+            'code': {'required': False, 'allow_null': True, 'allow_blank': True}
+        }
+
+    def validate(self, attrs):
+        if 'code' not in attrs or attrs['code'] == "":
+            attrs['code'] = None
+        return attrs
 
 
 class MaterialMovementSerializer(serializers.ModelSerializer):

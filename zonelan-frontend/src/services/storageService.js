@@ -1,5 +1,13 @@
 import axios from '../utils/axiosConfig';
 
+// Crear un helper para añadir el campo code a todas las peticiones
+const addCodeIfMissing = (data) => {
+  return {
+    ...data,
+    code: data.code === undefined ? "" : data.code
+  };
+};
+
 // Servicios para almacenes
 export const getWarehouses = async (params = {}) => {
   const response = await axios.get('/storage/warehouses/', { params });
@@ -16,8 +24,8 @@ export const getWarehouseDetails = async (id) => {
   return response.data;
 };
 
-export const createWarehouse = async (data) => {
-  const response = await axios.post('/storage/warehouses/', data);
+export const createWarehouse = async (warehouseData) => {
+  const response = await axios.post('/storage/warehouses/', addCodeIfMissing(warehouseData));
   return response.data;
 };
 
@@ -47,8 +55,8 @@ export const getDepartmentDetails = async (id) => {
   return response.data;
 };
 
-export const createDepartment = async (data) => {
-  const response = await axios.post('/storage/departments/', data);
+export const createDepartment = async (departmentData) => {
+  const response = await axios.post('/storage/departments/', addCodeIfMissing(departmentData));
   return response.data;
 };
 
@@ -78,8 +86,8 @@ export const getShelfDetails = async (id) => {
   return response.data;
 };
 
-export const createShelf = async (data) => {
-  const response = await axios.post('/storage/shelves/', data);
+export const createShelf = async (shelfData) => {
+  const response = await axios.post('/storage/shelves/', addCodeIfMissing(shelfData));
   return response.data;
 };
 
@@ -95,7 +103,13 @@ export const deleteShelf = async (id) => {
 
 // Servicios para baldas
 export const getTrays = async (params = {}) => {
-  const response = await axios.get('/storage/trays/', { params });
+  // Asegurarnos de solicitar datos expandidos
+  const queryParams = {
+    ...params,
+    expand: 'shelf,shelf__department,shelf__department__warehouse'
+  };
+  
+  const response = await axios.get('/storage/trays/', { params: queryParams });
   return response.data;
 };
 
@@ -109,8 +123,8 @@ export const getTrayMaterials = async (id) => {
   return response.data;
 };
 
-export const createTray = async (data) => {
-  const response = await axios.post('/storage/trays/', data);
+export const createTray = async (trayData) => {
+  const response = await axios.post('/storage/trays/', addCodeIfMissing(trayData));
   return response.data;
 };
 
@@ -145,8 +159,8 @@ export const getLowStockLocations = async () => {
   return response.data;
 };
 
-export const createMaterialLocation = async (data) => {
-  const response = await axios.post('/storage/locations/', data);
+export const createMaterialLocation = async (locationData) => {
+  const response = await axios.post('/storage/locations/', addCodeIfMissing(locationData));
   return response.data;
 };
 

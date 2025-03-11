@@ -117,8 +117,25 @@ const TrayList = () => {
         getWarehouses()
       ]);
       
-      setTrays(traysData);
-      setFilteredTrays(traysData);
+      // Procesar los datos para asegurar que tengan los campos necesarios
+      const processedTrays = traysData.map(tray => ({
+        ...tray,
+        shelf_name: tray.shelf_name || (tray.shelf && typeof tray.shelf === 'object' ? tray.shelf.name : '—'),
+        department_name: tray.department_name || 
+                        (tray.shelf && tray.shelf.department_name) || 
+                        (tray.shelf && typeof tray.shelf === 'object' && 
+                         tray.shelf.department && typeof tray.shelf.department === 'object' ? 
+                         tray.shelf.department.name : '—'),
+        warehouse_name: tray.warehouse_name || 
+                       (tray.shelf && tray.shelf.warehouse_name) || 
+                       (tray.shelf && typeof tray.shelf === 'object' && 
+                        tray.shelf.department && typeof tray.shelf.department === 'object' && 
+                        tray.shelf.department.warehouse && typeof tray.shelf.department.warehouse === 'object' ? 
+                        tray.shelf.department.warehouse.name : '—')
+      }));
+      
+      setTrays(processedTrays);
+      setFilteredTrays(processedTrays);
       setWarehouses(warehousesData);
       
       // Si hay filtros preestablecidos, cargar datos relacionados
@@ -306,13 +323,19 @@ const TrayList = () => {
     }
     
     try {
+      // Añadir explícitamente el code vacío para asegurar que se envía
+      const dataToSubmit = {
+        ...formData,
+        code: ""  // Enviar código vacío explícitamente
+      };
+      
+      console.log('Datos a enviar:', dataToSubmit); // Para depuración
+      
       if (editingTray) {
-        // Actualizar balda
-        await updateTray(editingTray.id, formData);
+        await updateTray(editingTray.id, dataToSubmit);
         toast.success('Balda actualizada correctamente');
       } else {
-        // Crear nueva balda
-        await createTray(formData);
+        await createTray(dataToSubmit);
         toast.success('Balda creada correctamente');
       }
       
@@ -320,7 +343,25 @@ const TrayList = () => {
       fetchData();
     } catch (error) {
       console.error('Error al guardar:', error);
-      toast.error(editingTray ? 'Error al actualizar la balda' : 'Error al crear la balda');
+      
+      // Mostrar mensaje de error más detallado
+      if (error.response && error.response.data) {
+        console.log('Respuesta de error:', error.response.data);
+        let errorMessage = '';
+        
+        // Formatear los errores para mostrar al usuario
+        if (typeof error.response.data === 'object') {
+          Object.entries(error.response.data).forEach(([key, value]) => {
+            errorMessage += `${key}: ${Array.isArray(value) ? value.join(', ') : value}\n`;
+          });
+        } else {
+          errorMessage = error.response.data;
+        }
+        
+        toast.error(`Error: ${errorMessage}`);
+      } else {
+        toast.error(editingTray ? 'Error al actualizar la balda' : 'Error al crear la balda');
+      }
     }
   };
 

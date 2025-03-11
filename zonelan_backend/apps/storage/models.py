@@ -174,8 +174,8 @@ class Tray(models.Model):
         return ""
     
     def save(self, *args, **kwargs):
-        # Si no hay código asignado, generarlo automáticamente
-        if not self.code:
+        # Comprobar si hay código asignado antes de intentar generar uno
+        if self.code is None or self.code == "":
             # Buscar el último código para esta estantería (BAL-XXX)
             last_tray = Tray.objects.filter(
                 shelf=self.shelf

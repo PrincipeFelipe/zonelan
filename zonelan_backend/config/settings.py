@@ -123,5 +123,6 @@ SIMPLE_JWT = {
 }
 
 # Configuración de CORS
-CORS_ALLOW_ALL_ORIGINS = True  # Solo para desarrollo
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True  # Solo para desarrollo
 AUTH_USER_MODEL = 'users.User'  # Especificar el modelo de usuario personalizado

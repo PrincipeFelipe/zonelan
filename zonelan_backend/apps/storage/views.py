@@ -78,6 +78,11 @@ class TrayViewSet(viewsets.ModelViewSet):
         locations = MaterialLocation.objects.filter(tray=tray)
         serializer = MaterialLocationSerializer(locations, many=True)
         return Response(serializer.data)
+    
+    # Añade este método para depuración
+    def create(self, request, *args, **kwargs):
+        print("TrayViewSet create - Datos recibidos:", request.data)
+        return super().create(request, *args, **kwargs)
 
 
 class MaterialLocationViewSet(viewsets.ModelViewSet):

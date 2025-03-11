@@ -141,25 +141,50 @@ const DepartmentList = () => {
       toast.error('El nombre de la dependencia es obligatorio');
       return;
     }
-
+    
     if (!formData.warehouse) {
       toast.error('Debe seleccionar un almacén');
       return;
     }
-
+  
     try {
+      // Asegurar que enviamos un campo code vacío
+      const dataToSubmit = {
+        ...formData,
+        code: formData.code || ""
+      };
+      
+      console.log("Datos a enviar:", dataToSubmit);
+      
       if (editingDepartment) {
-        await updateDepartment(editingDepartment.id, formData);
+        await updateDepartment(editingDepartment.id, dataToSubmit);
         toast.success('Dependencia actualizada correctamente');
       } else {
-        await createDepartment(formData);
+        await createDepartment(dataToSubmit);
         toast.success('Dependencia creada correctamente');
       }
-      handleCloseDialog();
-      fetchDepartments();
+      
+      setOpenDialog(false);
+      fetchDepartments(); // Función correcta que sí está definida
     } catch (error) {
       console.error('Error al guardar la dependencia:', error);
-      toast.error('Error al guardar la dependencia');
+      
+      // Mostrar mensaje detallado del error
+      const errorDetail = error.response?.data;
+      let errorMessage = '';
+      
+      if (errorDetail) {
+        if (typeof errorDetail === 'object') {
+          Object.entries(errorDetail).forEach(([key, value]) => {
+            const valueText = Array.isArray(value) ? value.join(', ') : value;
+            errorMessage += `${key}: ${valueText}\n`;
+          });
+        } else {
+          errorMessage = errorDetail.toString();
+        }
+      }
+      
+      toast.error(errorMessage || 'Error al guardar la dependencia');
     }
   };
 
