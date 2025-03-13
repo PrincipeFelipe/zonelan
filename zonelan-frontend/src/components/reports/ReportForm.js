@@ -593,9 +593,11 @@ const ReportForm = () => {
     return (
         <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                <Typography variant="h6">
-                    {editMode ? 'Editar Parte' : 'Nuevo Parte'}
-                </Typography>
+            <Typography variant="h6">
+                {editMode 
+                    ? `Editar Parte #${id}` 
+                    : 'Nuevo Parte'}
+            </Typography>
                 <Box>
                     <Button
                         sx={{ mr: 1 }}

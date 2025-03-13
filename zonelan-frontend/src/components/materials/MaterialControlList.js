@@ -16,6 +16,8 @@ import { toast, Toaster } from 'react-hot-toast';
 import axios from '../../utils/axiosConfig';
 import { getMediaUrl } from '../../utils/helpers';
 import { getMaterialMovementById } from '../../services/storageService';
+import ReportDetailModal from '../reports/ReportDetailModal';
+import TicketDetailModal from '../tickets/TicketDetailModal';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
@@ -44,6 +46,12 @@ const MaterialControlList = () => {
     const [openMovementDialog, setOpenMovementDialog] = useState(false);
     const [selectedMovement, setSelectedMovement] = useState(null);
     const [loadingMovement, setLoadingMovement] = useState(false);
+
+    // Añadir estos estados para los nuevos modales
+    const [openReportDialog, setOpenReportDialog] = useState(false);
+    const [selectedReportId, setSelectedReportId] = useState(null);
+    const [openTicketDialog, setOpenTicketDialog] = useState(false);
+    const [selectedTicketId, setSelectedTicketId] = useState(null);
 
     useEffect(() => {
         fetchMaterialControls();
@@ -159,7 +167,7 @@ const MaterialControlList = () => {
         }
     };
 
-    // Modificar getReasonLabel para incluir tickets
+    // Modificar getReasonLabel para incluir traslados
     const getReasonLabel = (reason, ticket) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
@@ -168,6 +176,7 @@ const MaterialControlList = () => {
             case 'RETIRADA': return 'Retirada';
             case 'USO': return 'Uso en reporte';
             case 'DEVOLUCION': return 'Devolución';
+            case 'TRASLADO': return 'Traslado';  // Añadir esta línea
             default: return reason;
         }
     };
@@ -225,6 +234,17 @@ const MaterialControlList = () => {
         }
     };
 
+    // Añadir estas nuevas funciones
+    const handleViewReport = (reportId) => {
+        setSelectedReportId(reportId);
+        setOpenReportDialog(true);
+    };
+
+    const handleViewTicket = (ticketId) => {
+        setSelectedTicketId(ticketId);
+        setOpenTicketDialog(true);
+    };
+
     // Modificar las columnas para aplicar alineación vertical consistente
 
 const columns = [
@@ -241,7 +261,8 @@ const columns = [
         ),
     },
     { 
-        field: 'timestamp', 
+        // Cambiar de 'timestamp' a 'date', que es el nombre correcto que viene del backend
+        field: 'date',  
         headerName: 'Fecha', 
         width: 180,
         renderCell: (params) => (
@@ -368,7 +389,8 @@ const columns = [
         }
     },
     { 
-        field: 'user_username', 
+        // Cambiar de 'user_username' a 'username', que es el nombre correcto que viene del backend
+        field: 'username',  
         headerName: 'Usuario', 
         width: 130,
         renderCell: (params) => (
@@ -390,28 +412,38 @@ const columns = [
             // Construir referencias según el tipo de referencia disponible
             const references = [];
             
-            // Referencia a reporte
+            // Referencia a reporte - Modificada para abrir modal
             if (params.row.report_id) {
                 references.push(
                     <Link 
-                        href={`/dashboard/reports/${params.row.report_id}`} 
+                        component="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleViewReport(params.row.report_id);
+                        }}
                         key="report"
                         underline="hover"
                         color="primary"
+                        sx={{ textAlign: 'left', cursor: 'pointer' }}
                     >
                         Reporte #{params.row.report_id}
                     </Link>
                 );
             }
             
-            // Referencia a ticket
+            // Referencia a ticket - Modificada para abrir modal
             if (params.row.ticket_id) {
                 references.push(
                     <Link 
-                        href={`/dashboard/tickets/${params.row.ticket_id}`}
+                        component="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleViewTicket(params.row.ticket_id);
+                        }}
                         key="ticket" 
                         underline="hover"
                         color="primary"
+                        sx={{ textAlign: 'left', cursor: 'pointer' }}
                     >
                         Ticket #{params.row.ticket_id}
                     </Link>
@@ -900,6 +932,19 @@ const columns = [
                     <Button onClick={handleCloseMovementDialog}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Añadir estos modales al final del componente */}
+            <ReportDetailModal
+                open={openReportDialog}
+                onClose={() => setOpenReportDialog(false)}
+                reportId={selectedReportId}
+            />
+            
+            <TicketDetailModal
+                open={openTicketDialog}
+                onClose={() => setOpenTicketDialog(false)}
+                ticketId={selectedTicketId}
+            />
         </Box>
     );
 };
