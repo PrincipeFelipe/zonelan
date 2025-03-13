@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Paper, Chip, Link,
-    TextField, MenuItem, FormControl, InputLabel, Select, Button,
-    Grid, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, 
-    DialogActions, LinearProgress
+    Box, Typography, Paper, Button, TextField, InputAdornment,
+    Grid, FormControl, InputLabel, Select, MenuItem, IconButton,
+    Tooltip, Chip, Link, Dialog, DialogTitle, DialogContent,
+    DialogActions, CircularProgress, LinearProgress
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { Link as RouterLink } from 'react-router-dom';
-import { 
-    FilterList, Receipt, Close, ReceiptOutlined,
-    Search, Clear
+import {
+    Search, Clear, Visibility, ReceiptOutlined, Close, 
+    ArrowDownward, ArrowUpward, ImportExport, FilterList
 } from '@mui/icons-material';
-import AssignmentIcon from '@mui/icons-material/Assignment'; // Para reportes
-import ReceiptIcon from '@mui/icons-material/Receipt'; // Para tickets
-import DescriptionIcon from '@mui/icons-material/Description'; // Para albaranes
-import { Toaster, toast } from 'react-hot-toast';
-import axios, { getMediaUrl } from '../../utils/axiosConfig';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast, Toaster } from 'react-hot-toast';
+import axios from '../../utils/axiosConfig';
+import { getMediaUrl } from '../../utils/helpers';
+import { getMaterialMovementById } from '../../services/storageService';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
@@ -41,6 +39,11 @@ const MaterialControlList = () => {
     // Lista de materiales para el filtro
     const [materialsList, setMaterialsList] = useState([]);
     const [usersList, setUsersList] = useState([]);
+
+    // Añadir estos nuevos estados
+    const [openMovementDialog, setOpenMovementDialog] = useState(false);
+    const [selectedMovement, setSelectedMovement] = useState(null);
+    const [loadingMovement, setLoadingMovement] = useState(false);
 
     useEffect(() => {
         fetchMaterialControls();
@@ -145,10 +148,6 @@ const MaterialControlList = () => {
         setOpenInvoice(true);
     };
 
-    const getOperationColor = (operation) => {
-        return operation === 'ADD' ? 'success' : 'error';
-    };
-
     const getReasonColor = (reason) => {
         switch (reason) {
             case 'COMPRA': return 'info';
@@ -180,6 +179,49 @@ const MaterialControlList = () => {
             return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: es });
         } catch (error) {
             return dateString;
+        }
+    };
+
+    // Añadir estas nuevas funciones
+    const handleViewMovement = async (movementId) => {
+        try {
+            setLoadingMovement(true);
+            setOpenMovementDialog(true);
+            
+            const movementData = await getMaterialMovementById(movementId);
+            setSelectedMovement(movementData);
+        } catch (error) {
+            console.error('Error al cargar los detalles del movimiento:', error);
+            toast.error('Error al cargar los detalles del movimiento');
+        } finally {
+            setLoadingMovement(false);
+        }
+    };
+
+    const handleCloseMovementDialog = () => {
+        setOpenMovementDialog(false);
+        setSelectedMovement(null);
+    };
+
+    const getOperationIcon = (operation) => {
+        switch(operation) {
+            case 'ADD':
+                return <ArrowDownward fontSize="small" sx={{ color: 'success.main' }} />;
+            case 'REMOVE':
+                return <ArrowUpward fontSize="small" sx={{ color: 'error.main' }} />;
+            case 'TRANSFER':
+                return <ImportExport fontSize="small" sx={{ color: 'info.main' }} />;
+            default:
+                return null;
+        }
+    };
+
+    const getOperationColor = (operation) => {
+        switch(operation) {
+            case 'ADD': return 'success';
+            case 'REMOVE': return 'error';
+            case 'TRANSFER': return 'info';
+            default: return 'default';
         }
     };
 
@@ -376,14 +418,19 @@ const columns = [
                 );
             }
             
-            // Referencia a movimiento - PRIORIZAR ESTA REFERENCIA SI EXISTE
+            // Referencia a movimiento - MOSTRAR MODAL EN VEZ DE NAVEGAR
             if (params.row.movement_id && params.row.movement_id > 0) {
                 references.push(
                     <Link 
-                        href={`/dashboard/storage/movements/${params.row.movement_id}`}
+                        component="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleViewMovement(params.row.movement_id);
+                        }}
                         key="movement" 
                         underline="hover"
                         color="primary"
+                        sx={{ textAlign: 'left', cursor: 'pointer' }}
                     >
                         Movimiento #{params.row.movement_id}
                     </Link>
@@ -747,6 +794,110 @@ const columns = [
                     >
                         Ver en nueva pestaña
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Añadir este diálogo para mostrar los detalles del movimiento */}
+            <Dialog open={openMovementDialog} onClose={handleCloseMovementDialog} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography>Detalles del Movimiento</Typography>
+                        <IconButton onClick={handleCloseMovementDialog}>
+                            <Clear />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent dividers>
+                    {loadingMovement ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : selectedMovement ? (
+                        <Grid container spacing={3}>
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Fecha y Hora
+                                </Typography>
+                                <Typography variant="body1">
+                                    {format(new Date(selectedMovement.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Tipo de Operación
+                                </Typography>
+                                <Chip 
+                                    label={selectedMovement.operation_display} 
+                                    color={getOperationColor(selectedMovement.operation)}
+                                    icon={getOperationIcon(selectedMovement.operation)}
+                                />
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Material
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedMovement.material_name}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Cantidad
+                                </Typography>
+                                <Typography variant="body1" fontWeight="medium">
+                                    {selectedMovement.quantity}
+                                </Typography>
+                            </Grid>
+                            
+                            {selectedMovement.operation !== 'ADD' && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Ubicación de Origen
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {selectedMovement.source_location_display || 'No especificado'}
+                                    </Typography>
+                                </Grid>
+                            )}
+                            
+                            {selectedMovement.operation !== 'REMOVE' && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Ubicación de Destino
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {selectedMovement.target_location_display || 'No especificado'}
+                                    </Typography>
+                                </Grid>
+                            )}
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Usuario
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedMovement.user_name}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Notas
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedMovement.notes || 'Sin notas'}
+                                </Typography>
+                            </Grid>
+                        </Grid>
+                    ) : (
+                        <Typography>No se pudo cargar la información del movimiento</Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseMovementDialog}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
         </Box>
