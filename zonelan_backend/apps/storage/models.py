@@ -198,23 +198,40 @@ class Tray(models.Model):
 
 
 class MaterialLocation(models.Model):
-    """
-    Vincula un material con su ubicación física en el sistema de almacenamiento.
-    """
-    material = models.ForeignKey(Material, on_delete=models.CASCADE, related_name='locations', verbose_name='Material')
-    tray = models.ForeignKey(Tray, on_delete=models.CASCADE, related_name='materials', verbose_name='Balda')
-    quantity = models.PositiveIntegerField(default=0, verbose_name='Cantidad')
-    minimum_quantity = models.PositiveIntegerField(default=0, verbose_name='Cantidad mínima')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='Fecha de actualización')
+    material = models.ForeignKey(Material, on_delete=models.CASCADE, related_name='locations')
+    tray = models.ForeignKey(Tray, on_delete=models.CASCADE, related_name='material_locations')
+    quantity = models.PositiveIntegerField(default=0)
+    minimum_quantity = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Ubicación de material'
-        verbose_name_plural = 'Ubicaciones de materiales'
-        unique_together = ['material', 'tray']
+        verbose_name = 'Ubicación de Material'
+        verbose_name_plural = 'Ubicaciones de Materiales'
+        ordering = ('-updated_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=['material', 'tray'],
+                name='unique_material_tray'
+            )
+        ]
 
     def __str__(self):
-        return f"{self.material.name} en {self.tray.get_full_code()}"
+        return f"{self.material.name} en {self.tray.name}"
+    
+    def get_full_path(self):
+        """Devuelve la ruta completa de la ubicación"""
+        try:
+            tray = self.tray
+            shelf = tray.shelf
+            department = shelf.department
+            warehouse = department.warehouse
+            
+            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+        except Exception as e:
+            # En caso de error, devolver una ruta parcial
+            return f"Ubicación {self.id}"
 
 
 class MaterialMovement(models.Model):

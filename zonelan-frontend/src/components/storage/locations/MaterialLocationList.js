@@ -36,16 +36,10 @@ const MaterialLocationList = () => {
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState([]);
   const [filteredLocations, setFilteredLocations] = useState([]);
-  const [showFilters, setShowFilters] = useState(false);
   const [showLowStock, setShowLowStock] = useState(false);
   
-  // Estados para los filtros
+  // Simplificar el estado de filtros, mantener solo lowStock
   const [filters, setFilters] = useState({
-    search: '',
-    warehouse: '',
-    department: '',
-    shelf: '',
-    tray: '',
     lowStock: false
   });
   
@@ -74,41 +68,23 @@ const MaterialLocationList = () => {
     loading: false
   });
 
+  // 1. Añade un nuevo estado para los selectores del formulario (al inicio del componente)
+  const [formSelectors, setFormSelectors] = useState({
+    warehouse: '',
+    department: '',
+    shelf: ''
+  });
+
   useEffect(() => {
     fetchLocations();
     fetchFilterData();
   }, []);
   
   useEffect(() => {
-    if (filters.warehouse) {
-      fetchDepartments(filters.warehouse);
-    } else {
-      setDepartments([]);
+    if (locations.length > 0) {
+      applyFilters();
     }
-    setFilters(prev => ({ ...prev, department: '', shelf: '', tray: '' }));
-  }, [filters.warehouse]);
-  
-  useEffect(() => {
-    if (filters.department) {
-      fetchShelves(filters.department);
-    } else {
-      setShelves([]);
-    }
-    setFilters(prev => ({ ...prev, shelf: '', tray: '' }));
-  }, [filters.department]);
-  
-  useEffect(() => {
-    if (filters.shelf) {
-      fetchTrays(filters.shelf);
-    } else {
-      setTrays([]);
-    }
-    setFilters(prev => ({ ...prev, tray: '' }));
-  }, [filters.shelf]);
-  
-  useEffect(() => {
-    applyFilters();
-  }, [locations, filters.lowStock]);
+  }, [locations, filters]); // Añade locations y filters como dependencias
   
   useEffect(() => {
     if (lowStockParam === 'true') {
@@ -145,12 +121,82 @@ const MaterialLocationList = () => {
     }
   }, [formData.material]);
 
+  useEffect(() => {
+    console.log('Estado de locations después de fetch:', locations);
+    console.log('Estado de filteredLocations después de filter:', filteredLocations);
+  }, [locations, filteredLocations]); // Se ejecutará cuando cualquiera de estas variables cambie
+
+  // Actualiza los efectos para escuchar cambios en formSelectors también
+useEffect(() => {
+  // Si hay cambio en el almacén de filtros o del formulario
+  if (filters.warehouse) {
+    fetchDepartments(filters.warehouse);
+  } else if (formSelectors.warehouse && openDialog) {
+    // Solo cargar si el diálogo está abierto
+    fetchDepartments(formSelectors.warehouse);
+  } else {
+    setDepartments([]);
+  }
+  
+  // Sólo resetear filtros, no formSelectors
+  if (!openDialog) {
+    setFilters(prev => ({ ...prev, department: '', shelf: '', tray: '' }));
+  }
+}, [filters.warehouse, formSelectors.warehouse, openDialog]);
+
+useEffect(() => {
+  // Si hay cambio en el departamento de filtros o del formulario
+  if (filters.department) {
+    fetchShelves(filters.department);
+  } else if (formSelectors.department && openDialog) {
+    // Solo cargar si el diálogo está abierto
+    fetchShelves(formSelectors.department);
+  } else {
+    setShelves([]);
+  }
+  
+  // Sólo resetear filtros, no formSelectors
+  if (!openDialog) {
+    setFilters(prev => ({ ...prev, shelf: '', tray: '' }));
+  }
+}, [filters.department, formSelectors.department, openDialog]);
+
+useEffect(() => {
+  // Si hay cambio en la estantería de filtros o del formulario
+  if (filters.shelf) {
+    fetchTrays(filters.shelf);
+  } else if (formSelectors.shelf && openDialog) {
+    // Solo cargar si el diálogo está abierto
+    fetchTrays(formSelectors.shelf);
+  } else {
+    setTrays([]);
+  }
+  
+  // Sólo resetear filtros, no formSelectors
+  if (!openDialog) {
+    setFilters(prev => ({ ...prev, tray: '' }));
+  }
+}, [filters.shelf, formSelectors.shelf, openDialog]);
+
   const fetchLocations = async () => {
     try {
       setLoading(true);
       const data = await getMaterialLocations();
+      
+      console.log('Ubicaciones cargadas:', data.length);
+      
+      // Guardar los datos completos
       setLocations(data);
-      setFilteredLocations(data);
+      
+      // Aplicar solo el filtro de stock bajo si está activo
+      if (filters.lowStock) {
+        const filtered = data.filter(location => 
+          location.quantity <= location.minimum_quantity
+        );
+        setFilteredLocations(filtered);
+      } else {
+        setFilteredLocations(data);
+      }
     } catch (error) {
       console.error('Error al cargar ubicaciones:', error);
       toast.error('Error al cargar las ubicaciones de materiales');
@@ -219,102 +265,29 @@ const MaterialLocationList = () => {
     }
   };
   
-  const handleSearch = (e) => {
-    setFilters({
-      ...filters,
-      search: e.target.value
-    });
-  };
+  // Simplificar applyFilters
+const applyFilters = () => {
+  let filtered = [...locations];
   
-  // Modificar handleFilterChange para que cuando se seleccione una balda,
-  // se actualice también el campo del formulario
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters({
-      ...filters,
-      [name]: value
-    });
-    
-    // Si se selecciona una balda en la jerarquía, actualizarla también en formData
-    if (name === 'shelf' && value) {
-      // Resetear la bandeja en formData cuando cambia la estantería
-      setFormData(prev => ({
-        ...prev,
-        tray: ''
-      }));
-    }
-  };
+  // Solo mantener el filtro de stock bajo
+  if (filters.lowStock) {
+    filtered = filtered.filter(location => 
+      location.quantity <= location.minimum_quantity
+    );
+  }
   
-  const applyFilters = () => {
-    let filtered = [...locations];
-    
-    // Filtrar por búsqueda
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      filtered = filtered.filter(location => (
-        location.material_name.toLowerCase().includes(searchTerm) ||
-        location.tray_name.toLowerCase().includes(searchTerm) ||
-        location.tray_full_code.toLowerCase().includes(searchTerm) ||
-        location.warehouse_name.toLowerCase().includes(searchTerm) ||
-        location.department_name.toLowerCase().includes(searchTerm) ||
-        location.shelf_name.toLowerCase().includes(searchTerm)
-      ));
-    }
-    
-    // Filtrar por almacén
-    if (filters.warehouse) {
-      filtered = filtered.filter(location => 
-        location.tray?.shelf?.department?.warehouse === parseInt(filters.warehouse)
-      );
-    }
-    
-    // Filtrar por dependencia
-    if (filters.department) {
-      filtered = filtered.filter(location => 
-        location.tray?.shelf?.department === parseInt(filters.department)
-      );
-    }
-    
-    // Filtrar por estantería
-    if (filters.shelf) {
-      filtered = filtered.filter(location => 
-        location.tray?.shelf === parseInt(filters.shelf)
-      );
-    }
-    
-    // Filtrar por balda
-    if (filters.tray) {
-      filtered = filtered.filter(location => 
-        location.tray === parseInt(filters.tray)
-      );
-    }
-    
-    // Filtrar por stock bajo
-    if (filters.lowStock) {
-      filtered = filtered.filter(location => 
-        location.quantity <= location.minimum_quantity
-      );
-    }
-    
-    setFilteredLocations(filtered);
-  };
-  
-  const resetFilters = () => {
-    setFilters({
-      search: '',
-      warehouse: '',
-      department: '',
-      shelf: '',
-      tray: '',
-      lowStock: false
-    });
-    setDepartments([]);
-    setShelves([]);
-    setTrays([]);
-    setShowLowStock(false);
-    fetchLocations();
-  };
-  
+  setFilteredLocations(filtered);
+};
+
+  // Simplificar resetFilters
+const resetFilters = () => {
+  setFilters({
+    lowStock: false
+  });
+  setShowLowStock(false);
+  fetchLocations();
+};
+
   // Reemplazar la función handleOpenDialog existente con esta versión mejorada
 const handleOpenDialog = async (location = null) => {
   try {
@@ -341,13 +314,13 @@ const handleOpenDialog = async (location = null) => {
       
       // Establecer los valores seleccionados en orden jerárquico
       const warehouseId = departmentData.warehouse;
-      setFilters(prev => ({ ...prev, warehouse: warehouseId }));
+      setFormSelectors(prev => ({ ...prev, warehouse: warehouseId }));
       await fetchDepartments(warehouseId);
       
-      setFilters(prev => ({ ...prev, department: shelfData.department }));
+      setFormSelectors(prev => ({ ...prev, department: shelfData.department }));
       await fetchShelves(shelfData.department);
       
-      setFilters(prev => ({ ...prev, shelf: trayData.shelf }));
+      setFormSelectors(prev => ({ ...prev, shelf: trayData.shelf }));
       await fetchTrays(trayData.shelf);
       
     } else {
@@ -360,14 +333,12 @@ const handleOpenDialog = async (location = null) => {
         minimum_quantity: 0
       });
       
-      // Resetear los filtros/selectores jerárquicos
-      setFilters(prev => ({ 
-        ...prev, 
+      // Resetear los selectores jerárquicos
+      setFormSelectors({ 
         warehouse: '', 
         department: '', 
-        shelf: '', 
-        tray: '' 
-      }));
+        shelf: ''
+      });
       
       setDepartments([]);
       setShelves([]);
@@ -381,10 +352,31 @@ const handleOpenDialog = async (location = null) => {
   }
 };
   
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingLocation(null);
-  };
+const handleCloseDialog = () => {
+  setOpenDialog(false);
+  setEditingLocation(null);
+  setFormData({
+    material: '',
+    tray: '',
+    quantity: 0,
+    minimum_quantity: 0
+  });
+  
+  // Resetear los selectores del formulario
+  setFormSelectors({
+    warehouse: '',
+    department: '',
+    shelf: ''
+  });
+  
+  // Reestablecer también la información de stock
+  setStockInfo({
+    totalStock: 0,
+    totalAllocated: 0,
+    availableStock: 0,
+    loading: false
+  });
+};
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -393,6 +385,35 @@ const handleOpenDialog = async (location = null) => {
       [name]: name === 'quantity' || name === 'minimum_quantity' ? Number(value) : value
     });
   };
+  
+  // Añadir esta función después de handleInputChange
+const handleFormSelectorChange = (e) => {
+  const { name, value } = e.target;
+  setFormSelectors({
+    ...formSelectors,
+    [name]: value
+  });
+  
+  // Gestionar los cambios de jerarquía
+  if (name === 'warehouse') {
+    // Si cambia el almacén, cargar departamentos y resetear selecciones inferiores
+    fetchDepartments(value);
+    setFormSelectors(prev => ({ ...prev, department: '', shelf: '' }));
+    setFormData(prev => ({ ...prev, tray: '' }));
+    setShelves([]);
+    setTrays([]);
+  } else if (name === 'department') {
+    // Si cambia el departamento, cargar estanterías y resetear selecciones inferiores
+    fetchShelves(value);
+    setFormSelectors(prev => ({ ...prev, shelf: '' }));
+    setFormData(prev => ({ ...prev, tray: '' }));
+    setTrays([]);
+  } else if (name === 'shelf') {
+    // Si cambia la estantería, cargar baldas y resetear la balda seleccionada
+    fetchTrays(value);
+    setFormData(prev => ({ ...prev, tray: '' }));
+  }
+};
   
   const handleSubmit = async () => {
     try {
@@ -411,8 +432,10 @@ const handleOpenDialog = async (location = null) => {
         return;
       }
       
-      // Verificar stock disponible (nuevo)
+      // Verificar stock disponible
       const stockInfo = await verifyAvailableStock(formData.material);
+      
+      let savedLocation;
       
       if (editingLocation) {
         // Si estamos editando, debemos considerar el stock actual
@@ -425,7 +448,7 @@ const handleOpenDialog = async (location = null) => {
           return;
         }
         
-        await updateMaterialLocation(editingLocation.id, formData);
+        savedLocation = await updateMaterialLocation(editingLocation.id, formData);
         toast.success('Ubicación de material actualizada correctamente');
       } else {
         // Si estamos creando, verificar si hay suficiente stock
@@ -434,12 +457,38 @@ const handleOpenDialog = async (location = null) => {
           return;
         }
         
-        await createMaterialLocation(formData);
+        savedLocation = await createMaterialLocation(formData);
         toast.success('Ubicación de material creada correctamente');
       }
       
+      // Cerrar el diálogo
       handleCloseDialog();
-      fetchLocations();
+      
+      // Recargar la lista completa en lugar de intentar actualizar el estado directamente
+      setLoading(true);
+      
+      try {
+        const newLocations = await getMaterialLocations();
+        setLocations(newLocations);
+        
+        // Simplificar el filtrado, aplicar solo filtro de stock bajo
+        let filtered = [...newLocations];
+        
+        if (filters.lowStock) {
+          filtered = filtered.filter(location => 
+            location.quantity <= location.minimum_quantity
+          );
+        }
+        
+        setFilteredLocations(filtered);
+        
+      } catch (error) {
+        console.error('Error al recargar ubicaciones:', error);
+        toast.error('Error al actualizar la lista de ubicaciones');
+      } finally {
+        setLoading(false);
+      }
+      
     } catch (error) {
       console.error('Error al guardar la ubicación:', error);
       toast.error('Error al guardar la ubicación de material');
@@ -740,160 +789,55 @@ const verifyAvailableStock = async (materialId) => {
       
       {/* Botones de acción */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Button
-          variant={showLowStock ? 'contained' : 'outlined'}
-          color={showLowStock ? 'error' : 'primary'}
-          startIcon={<WarningAmber />}
-          onClick={() => {
-            if (showLowStock) {
-              fetchLocations();
-              setShowLowStock(false);
-            } else {
-              fetchLowStock();
-            }
-          }}
-        >
-          {showLowStock ? 'Ver Todas' : 'Ver Stock Bajo'}
-        </Button>
+        <Typography variant="h6">
+          {showLowStock ? 'Ubicaciones con Stock Bajo' : 'Ubicaciones de Materiales'}
+        </Typography>
         
         <Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nueva Ubicación
-          </Button>
+          {/* Mostrar el botón "Ver Todas" solo cuando estamos en modo stock bajo y NO venimos del parámetro URL */}
+          {showLowStock && !lowStockParam && (
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<Visibility />}
+              onClick={() => {
+                fetchLocations();
+                setShowLowStock(false);
+              }}
+              sx={{ mr: 1 }}
+            >
+              Ver Todas
+            </Button>
+          )}
+          
+          {/* Mostrar el botón "Ver Stock Bajo" solo cuando no estamos en modo stock bajo */}
+          {!showLowStock && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<WarningAmber />}
+              onClick={() => {
+                fetchLowStock();
+              }}
+              sx={{ mr: 1 }}
+            >
+              Ver Stock Bajo
+            </Button>
+          )}
+          
+          {/* Mostrar el botón "Nueva Ubicación" solo cuando NO estamos en el modo stock bajo por parámetro URL */}
+          {!lowStockParam && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleOpenDialog()}
+            >
+              Nueva Ubicación
+            </Button>
+          )}
         </Box>
       </Box>
       
-      {/* Filtros de búsqueda */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-          <TextField
-            label="Buscar"
-            variant="outlined"
-            size="small"
-            value={filters.search}
-            onChange={handleSearch}
-            sx={{ flexGrow: 1, minWidth: 120 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-              endAdornment: filters.search ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setFilters({ ...filters, search: '' })}>
-                    <Clear fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null
-            }}
-          />
-          
-          <Tooltip title="Filtros avanzados">
-            <IconButton onClick={() => setShowFilters(!showFilters)}>
-              <FilterList />
-            </IconButton>
-          </Tooltip>
-        </Box>
-
-        {showFilters && (
-          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <FormControl sx={{ minWidth: 200 }} size="small">
-              <InputLabel>Almacén</InputLabel>
-              <Select
-                name="warehouse"
-                value={filters.warehouse}
-                label="Almacén"
-                onChange={handleFilterChange}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {warehouses.map(warehouse => (
-                  <MenuItem key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
-            {departments.length > 0 && (
-              <FormControl sx={{ minWidth: 200 }} size="small">
-                <InputLabel>Dependencia</InputLabel>
-                <Select
-                  name="department"
-                  value={filters.department}
-                  label="Dependencia"
-                  onChange={handleFilterChange}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {departments.map(department => (
-                    <MenuItem key={department.id} value={department.id}>
-                      {department.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            
-            {shelves.length > 0 && (
-              <FormControl sx={{ minWidth: 200 }} size="small">
-                <InputLabel>Estantería</InputLabel>
-                <Select
-                  name="shelf"
-                  value={filters.shelf}
-                  label="Estantería"
-                  onChange={handleFilterChange}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {shelves.map(shelf => (
-                    <MenuItem key={shelf.id} value={shelf.id}>
-                      {shelf.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            
-            {trays.length > 0 && (
-              <FormControl sx={{ minWidth: 200 }} size="small">
-                <InputLabel>Balda</InputLabel>
-                <Select
-                  name="tray"
-                  value={filters.tray}
-                  label="Balda"
-                  onChange={handleFilterChange}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {trays.map(tray => (
-                    <MenuItem key={tray.id} value={tray.id}>
-                      {tray.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            
-            <Button 
-              variant="text"
-              onClick={resetFilters}
-            >
-              Limpiar filtros
-            </Button>
-            
-            <Button
-              variant="outlined"
-              startIcon={<ArrowUpward />}
-              onClick={applyFilters}
-            >
-              Aplicar
-            </Button>
-          </Box>
-        )}
-      </Paper>
-
       {/* Tabla de ubicaciones */}
       <Paper sx={{ width: '100%', overflow: 'hidden' }}>
         <Box sx={{ width: '100%' }}>
@@ -906,6 +850,11 @@ const verifyAvailableStock = async (materialId) => {
               },
               sorting: {
                 sortModel: [{ field: 'warehouse_name', sort: 'asc' }],
+              },
+              filter: {
+                filterModel: {
+                  items: [],
+                },
               },
             }}
             pageSizeOptions={[10, 25, 50, 100]}
@@ -989,7 +938,7 @@ const verifyAvailableStock = async (materialId) => {
                     value={formData.material}
                     label="Material *"
                     onChange={handleInputChange}
-                    disabled={editingLocation} // Desactivar cambio de material al editar
+                    disabled={Boolean(editingLocation)}
                   >
                     {materials.map((material) => (
                       <MenuItem key={material.id} value={material.id}>
@@ -1048,9 +997,9 @@ const verifyAvailableStock = async (materialId) => {
                   <InputLabel>Almacén</InputLabel>
                   <Select
                     name="warehouse"
-                    value={filters.warehouse}
+                    value={formSelectors.warehouse}
                     label="Almacén *"
-                    onChange={handleFilterChange}
+                    onChange={handleFormSelectorChange}
                   >
                     <MenuItem value="">Seleccione un almacén</MenuItem>
                     {warehouses.map((warehouse) => (
@@ -1064,13 +1013,14 @@ const verifyAvailableStock = async (materialId) => {
               
               {/* Selector de departamento */}
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required disabled={!filters.warehouse}>
+                <FormControl fullWidth required disabled={!formSelectors.warehouse}>
                   <InputLabel>Dependencia</InputLabel>
                   <Select
                     name="department"
-                    value={filters.department}
+                    value={formSelectors.department}
                     label="Dependencia *"
-                    onChange={handleFilterChange}
+                    onChange={handleFormSelectorChange}
+                    disabled={!Boolean(formSelectors.warehouse)}
                   >
                     <MenuItem value="">Seleccione una dependencia</MenuItem>
                     {departments.map((department) => (
@@ -1084,13 +1034,14 @@ const verifyAvailableStock = async (materialId) => {
               
               {/* Selector de estantería */}
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required disabled={!filters.department}>
+                <FormControl fullWidth required disabled={!formSelectors.department}>
                   <InputLabel>Estantería</InputLabel>
                   <Select
                     name="shelf"
-                    value={filters.shelf}
+                    value={formSelectors.shelf}
                     label="Estantería *"
-                    onChange={handleFilterChange}
+                    onChange={handleFormSelectorChange}
+                    disabled={!Boolean(formSelectors.department)}
                   >
                     <MenuItem value="">Seleccione una estantería</MenuItem>
                     {shelves.map((shelf) => (
@@ -1104,13 +1055,14 @@ const verifyAvailableStock = async (materialId) => {
               
               {/* Selector de balda */}
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required disabled={!filters.shelf}>
+                <FormControl fullWidth required disabled={!formSelectors.shelf}>
                   <InputLabel>Balda</InputLabel>
                   <Select
                     name="tray"
                     value={formData.tray}
                     label="Balda *"
                     onChange={handleInputChange}
+                    disabled={!Boolean(formSelectors.shelf)}
                   >
                     <MenuItem value="">Seleccione una balda</MenuItem>
                     {trays.map((tray) => (

@@ -1,7 +1,8 @@
 from django.shortcuts import render
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from django.db import models, transaction
 from django.db.models import F
 from django_filters.rest_framework import DjangoFilterBackend
@@ -133,73 +134,80 @@ class MaterialMovementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        movement = serializer.validated_data
-        operation = movement.get('operation')
-        material = movement.get('material')
-        quantity = movement.get('quantity')
-        source_location = movement.get('source_location')
-        target_location = movement.get('target_location')
+        # Obtener datos validados
+        movement_data = serializer.validated_data
+        operation = movement_data.get('operation')
+        material = movement_data.get('material')
+        quantity = movement_data.get('quantity')
         
-        # Validaciones según el tipo de operación
-        if operation == 'TRANSFER' and (not source_location or not target_location):
-            return Response(
-                {"error": "Para traslados, debe especificar ubicación de origen y destino"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Crear instancia y guardar para obtener el ID
+        instance = serializer.save(user=request.user)
         
-        if operation == 'ADD' and not target_location:
-            return Response(
-                {"error": "Para entradas, debe especificar ubicación de destino"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        if operation == 'REMOVE' and not source_location:
-            return Response(
-                {"error": "Para salidas, debe especificar ubicación de origen"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Verificar stock suficiente para salidas y traslados
-        if operation in ['REMOVE', 'TRANSFER'] and source_location.quantity < quantity:
-            return Response(
-                {"error": f"Stock insuficiente. Disponible: {source_location.quantity}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Actualizar stock de ubicaciones
-        if operation in ['REMOVE', 'TRANSFER']:
-            source_location.quantity -= quantity
-            source_location.save()
-            
-        if operation in ['ADD', 'TRANSFER']:
-            # Si la ubicación de destino ya existe, incrementar cantidad
-            if target_location:
-                target_location.quantity += quantity
-                target_location.save()
-            else:
-                # Si no existe una ubicación para este material en esta balda, crearla
-                target_location = MaterialLocation.objects.create(
-                    material=material,
-                    tray=movement.get('target_tray'),
-                    quantity=quantity
-                )
-                movement['target_location'] = target_location
+        # Registrar en MaterialControl según el tipo de operación
+        from apps.materials.models import MaterialControl
         
-        # Registrar en MaterialControl si no existe una referencia
-        if not movement.get('material_control'):
+        if operation == 'TRANSFER':
+            # Para traslados, registrar como TRANSFER
             material_control = MaterialControl.objects.create(
                 user=request.user,
                 material=material,
                 quantity=quantity,
-                operation='ADD' if operation in ['ADD', 'TRANSFER'] else 'REMOVE',
-                reason='RETIRADA' if operation == 'REMOVE' else 'COMPRA'
+                operation='TRANSFER',
+                reason='TRASLADO',
+                movement_id=instance.id,  # Establecer explícitamente el ID del movimiento
+                location_reference=f"Traslado desde {instance.source_location} hacia {instance.target_location or 'nueva ubicación'}"
             )
-            movement['material_control'] = material_control
+        else:
+            # Para entradas/salidas mantener comportamiento existente
+            material_control = MaterialControl.objects.create(
+                user=request.user,
+                material=material,
+                quantity=quantity,
+                operation=operation,
+                reason='RETIRADA' if operation == 'REMOVE' else 'COMPRA',
+                movement_id=instance.id,  # Establecer explícitamente el ID del movimiento
+                location_reference=f"{'Entrada a' if operation == 'ADD' else 'Salida de'} {instance.target_location if operation == 'ADD' else instance.source_location}"
+            )
         
-        # Guardar el movimiento
-        instance = serializer.save(user=request.user)
+        # Asignar la relación también desde el otro lado
+        instance.material_control = material_control
+        instance.save()
         
         return Response(
             self.get_serializer(instance).data,
             status=status.HTTP_201_CREATED
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def material_available_locations(request, material_id):
+    """Endpoint para obtener ubicaciones disponibles de un material"""
+    try:
+        # Obtener ubicaciones con stock disponible
+        locations = MaterialLocation.objects.filter(
+            material_id=material_id,
+            quantity__gt=0
+        ).select_related('tray__shelf__department__warehouse')
+        
+        serializer = MaterialLocationSerializer(locations, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"detail": str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def material_locations(request, material_id):
+    """Endpoint para obtener ubicaciones de un material"""
+    try:
+        # Obtener ubicaciones con stock disponible
+        locations = MaterialLocation.objects.filter(
+            material_id=material_id,
+            quantity__gt=0
+        ).select_related('tray__shelf__department__warehouse')
+        
+        serializer = MaterialLocationSerializer(locations, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"detail": str(e)}, status=400)

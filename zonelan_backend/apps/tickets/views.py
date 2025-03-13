@@ -266,12 +266,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                 # Validar stock suficiente
                 material_id = data.get('material')
                 quantity = float(data.get('quantity', 0))
+                location_id = data.get('location_id')
                 
                 if material_id and quantity > 0:
                     material = get_object_or_404(Material, id=material_id)
                     
-                    # Verificar si hay stock suficiente
-                    if material.quantity < quantity:
+                    # Verificar stock - ahora se maneja en el serializer para casos con ubicación
+                    if not location_id and material.quantity < quantity:
                         return Response({
                             'detail': f"No hay suficiente stock del material {material.name}. Disponible: {material.quantity}"
                         }, status=status.HTTP_400_BAD_REQUEST)
@@ -289,6 +290,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                         {"detail": "Datos incompletos o inválidos."},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                    
             except Exception as e:
                 logger.error(f"Error al crear ticket item: {str(e)}")
                 return Response(

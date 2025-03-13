@@ -18,7 +18,12 @@ import {
     Box,
     CircularProgress,
     Chip,
-    MenuItem
+    MenuItem,
+    Tooltip,
+    Card,
+    CardContent,
+    Divider,
+    Grid
 } from '@mui/material';
 import { Edit, Delete, Add, Print, Visibility, AssessmentOutlined, Close } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
@@ -29,6 +34,7 @@ import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import ReportDialog from '../reports/ReportDialog';
 
 const CustomerList = () => {
     const [customers, setCustomers] = useState([]);
@@ -52,6 +58,12 @@ const CustomerList = () => {
 
     const [incidentToEdit, setIncidentToEdit] = useState(null);
     const [openEditIncidentDialog, setOpenEditIncidentDialog] = useState(false);
+
+    const [selectedIncidentDetail, setSelectedIncidentDetail] = useState(null);
+    const [openIncidentDetailDialog, setOpenIncidentDetailDialog] = useState(false);
+    const [loadingIncidentDetail, setLoadingIncidentDetail] = useState(false);
+    const [incidentReports, setIncidentReports] = useState([]);
+    const [openReportDialog, setOpenReportDialog] = useState(false);
 
     const currentUser = authService.getCurrentUser();
     const navigate = useNavigate();
@@ -1991,130 +2003,149 @@ const createSegregatedReport = (customer, startDate, endDate, incidents, reports
     // En el diálogo de incidencias del cliente (openIncidencesDialog)
 
     // Primero, añade esta nueva función para manejar la impresión de incidencia desde el diálogo
-    const handlePrintIncidentFromDialog = async (incident) => {
-        try {
-            // Mostrar indicador de carga
-            const loadingToast = toast.loading('Preparando informe...');
-            
-            // Obtener reportes asociados a esta incidencia
-            const response = await axios.get(`/reports/reports/?incident=${incident.id}`);
-            const reports = Array.isArray(response.data) ? response.data : [];
-            
-            // Traducir los estados y prioridades para mostrar textos legibles
-            const statusChoices = {
-                'PENDING': 'Pendiente',
-                'IN_PROGRESS': 'En Progreso',
-                'RESOLVED': 'Resuelta',
-                'CLOSED': 'Cerrada'
-            };
-            
-            const priorityChoices = {
-                'LOW': 'Baja',
-                'MEDIUM': 'Media',
-                'HIGH': 'Alta',
-                'CRITICAL': 'Crítica'
-            };
-            
-            // Crear el contenido HTML para el informe
-            const printContent = `
-                <html>
-                    <head>
-                        <title>Informe de Incidencia #${incident.id}</title>
-                        <style>
-                            body { 
-                                font-family: Arial, sans-serif;
-                                padding: 20px;
-                                line-height: 1.6;
-                            }
-                            .section {
-                                margin-bottom: 20px;
-                                break-inside: avoid;
-                            }
-                            .section-title {
-                                font-size: 16px;
-                                font-weight: bold;
-                                border-bottom: 1px solid #ccc;
-                                padding-bottom: 5px;
-                                margin-bottom: 10px;
-                            }
-                            .info-row {
-                                margin: 5px 0;
-                            }
-                            .info-label {
-                                font-weight: bold;
-                            }
-                            .report {
-                                border: 1px solid #ccc;
-                                padding: 10px;
-                                margin: 10px 0;
-                                break-inside: avoid;
-                            }
-                            table {
-                                width: 100%;
-                                border-collapse: collapse;
-                                margin: 10px 0;
-                            }
-                            th, td {
-                                border: 1px solid #ccc;
-                                padding: 8px;
-                                text-align: left;
-                            }
-                            @media print {
-                                @page { margin: 2cm; }
-                                .report { page-break-inside: avoid; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>Informe de Incidencia #${incident.id}</h1>
-                        
-                        <div class="section">
-                            <div class="section-title">Información de la Incidencia</div>
-                            <div class="info-row"><span class="info-label">Título:</span> ${incident.title}</div>
-                            <div class="info-row"><span class="info-label">Cliente:</span> ${incident.customer_name}</div>
-                            <div class="info-row"><span class="info-label">Estado:</span> ${statusChoices[incident.status] || incident.status}</div>
-                            <div class="info-row"><span class="info-label">Prioridad:</span> ${priorityChoices[incident.priority] || incident.priority}</div>
-                            <div class="info-row"><span class="info-label">Fecha creación:</span> ${new Date(incident.created_at).toLocaleDateString()}</div>
-                            <div class="info-row"><span class="info-label">Descripción:</span> ${incident.description}</div>
-                            ${incident.resolution_notes ? `<div class="info-row"><span class="info-label">Notas de resolución:</span> ${incident.resolution_notes}</div>` : ''}
-                        </div>
-
-                        ${reports.length > 0 ? `
-                            <div class="section">
-                                <div class="section-title">Partes de Trabajo (${reports.length})</div>
-                                ${reports.map(report => `
-                                    <div class="report">
-                                        <div class="info-row"><span class="info-label">Fecha:</span> ${new Date(report.date).toLocaleDateString()}</div>
-                                        <div class="info-row"><span class="info-label">Estado:</span> ${report.status === 'DRAFT' ? 'Borrador' : 'Completado'}</div>
-                                        <div class="info-row"><span class="info-label">Horas trabajadas:</span> ${report.hours_worked || 'No especificadas'}</div>
-                                        <div class="info-row"><span class="info-label">Técnicos:</span> ${report.technicians?.map(tech => tech.technician_name).join(', ') || 'Sin asignar'}</div>
-                                        <div class="info-row"><span class="info-label">Descripción:</span> ${report.description}</div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : '<div class="section">No hay partes de trabajo asociados a esta incidencia.</div>'}
-                    </body>
-                </html>
-            `;
-
-            // Cerrar el toast de carga
-            toast.dismiss(loadingToast);
-            
-            // Abrir ventana de impresión
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            printWindow.focus();
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 500);
-            
-        } catch (error) {
-            console.error('Error al imprimir incidencia:', error);
-            toast.error('Error al generar el informe de la incidencia');
+    const handlePrintIncidentFromDialog = (incident) => {
+        if (!incident) return;
+        
+        // Crear contenido HTML para imprimir
+        const printContent = `
+          <html>
+            <head>
+              <title>Incidencia #${incident.id}</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  line-height: 1.5;
+                  margin: 20px;
+                }
+                .header {
+                  text-align: center;
+                  margin-bottom: 20px;
+                }
+                h1 {
+                  font-size: 24px;
+                  margin-bottom: 5px;
+                }
+                .meta-info {
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 15px;
+                  margin-bottom: 20px;
+                }
+                .meta-item {
+                  margin-bottom: 10px;
+                }
+                .meta-label {
+                  font-weight: bold;
+                }
+                .section {
+                  margin-bottom: 25px;
+                }
+                .section-title {
+                  font-size: 16px;
+                  font-weight: bold;
+                  border-bottom: 1px solid #ddd;
+                  padding-bottom: 5px;
+                  margin-bottom: 10px;
+                }
+                .description {
+                  background-color: #f9f9f9;
+                  padding: 10px;
+                  border-radius: 5px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Incidencia #${incident.id}</h1>
+                <p>${incident.title}</p>
+              </div>
+              
+              <div class="meta-info">
+                <div class="meta-item">
+                  <div class="meta-label">Cliente:</div>
+                  <div>${incident.customer_name}</div>
+                </div>
+                <div class="meta-item">
+                  <div class="meta-label">Estado:</div>
+                  <div>${getStatusText(incident.status)}</div>
+                </div>
+                <div class="meta-item">
+                  <div class="meta-label">Prioridad:</div>
+                  <div>${getPriorityText(incident.priority)}</div>
+                </div>
+                <div class="meta-item">
+                  <div class="meta-label">Fecha de creación:</div>
+                  <div>${format(new Date(incident.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</div>
+                </div>
+                <div class="meta-item">
+                  <div class="meta-label">Reportada por:</div>
+                  <div>${incident.reported_by_name || 'No especificado'}</div>
+                </div>
+                <div class="meta-item">
+                  <div class="meta-label">Última actualización:</div>
+                  <div>${format(new Date(incident.updated_at), 'dd/MM/yyyy HH:mm', { locale: es })}</div>
+                </div>
+              </div>
+              
+              <div class="section">
+                <div class="section-title">Descripción</div>
+                <div class="description">${incident.description}</div>
+              </div>
+              
+              ${incident.resolution_notes ? `
+                <div class="section">
+                  <div class="section-title">Notas de resolución</div>
+                  <div class="description">${incident.resolution_notes}</div>
+                </div>
+              ` : ''}
+            </body>
+          </html>
+        `;
+        
+        // Crear un iframe oculto
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        // Escribir el contenido en el iframe
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(printContent);
+        doc.close();
+        
+        // Esperar a que el contenido se cargue completamente
+        setTimeout(() => {
+          // Imprimir el iframe
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          
+          // Eliminar el iframe después de imprimir (con retraso para asegurar que termine)
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 1000);
+        }, 500);
+      };
+      
+      // Funciones auxiliares
+      const getStatusText = (status) => {
+        switch(status) {
+          case 'PENDING': return 'Pendiente';
+          case 'IN_PROGRESS': return 'En Progreso';
+          case 'RESOLVED': return 'Resuelta';
+          case 'CLOSED': return 'Cerrada';
+          default: return status;
         }
-    };
+      };
+      
+      const getPriorityText = (priority) => {
+        switch(priority) {
+          case 'LOW': return 'Baja';
+          case 'MEDIUM': return 'Media';
+          case 'HIGH': return 'Alta';
+          case 'CRITICAL': return 'Crítica';
+          default: return priority;
+        }
+      };
 
     // Añadir esta función justo antes o después de handlePrintIncidentFromDialog
 
@@ -2145,6 +2176,89 @@ const handleIncidentInputChange = (e) => {
         ...incidentToEdit,
         [e.target.name]: e.target.value
     });
+};
+
+// Añadir esta función dentro del componente CustomerList
+const handleViewIncidentDetail = async (incident) => {
+    try {
+        setSelectedIncidentDetail(incident);
+        setLoadingIncidentDetail(true);
+        setOpenIncidentDetailDialog(true);
+        
+        // Obtener los reportes asociados a la incidencia
+        const response = await axios.get(`/reports/reports/?incident=${incident.id}`);
+        
+        if (Array.isArray(response.data)) {
+            setIncidentReports(response.data);
+        } else if (response.data.results && Array.isArray(response.data.results)) {
+            setIncidentReports(response.data.results);
+        } else {
+            setIncidentReports([]);
+            console.error('Formato de respuesta inesperado:', response.data);
+        }
+    } catch (error) {
+        console.error('Error al cargar los detalles de la incidencia:', error);
+        toast.error('Error al cargar los detalles de la incidencia');
+        setIncidentReports([]);
+    } finally {
+        setLoadingIncidentDetail(false);
+    }
+};
+
+// Añadir estas funciones dentro del componente CustomerList para renderizar los chips
+const renderStatusChip = (status) => {
+    const statusMap = {
+        'PENDING': { label: 'Pendiente', color: '#ed6c02', border: '#ed6c02' },
+        'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', border: '#0288d1' },
+        'RESOLVED': { label: 'Resuelta', color: '#2e7d32', border: '#2e7d32' },
+        'CLOSED': { label: 'Cerrada', color: '#616161', border: '#616161' }
+    };
+    
+    const statusConfig = statusMap[status] || { label: status, color: '#757575', border: '#757575' };
+    
+    return (
+        <Chip
+            size="small"
+            label={statusConfig.label}
+            sx={{
+                color: statusConfig.color,
+                border: `1px solid ${statusConfig.border}`,
+                backgroundColor: 'transparent',
+                fontWeight: 500
+            }}
+            variant="outlined"
+        />
+    );
+};
+
+const renderPriorityChip = (priority) => {
+    const priorityMap = {
+        'LOW': { label: 'Baja', color: '#2e7d32', border: '#2e7d32' },
+        'MEDIUM': { label: 'Media', color: '#ed6c02', border: '#ed6c02' },
+        'HIGH': { label: 'Alta', color: '#d32f2f', border: '#d32f2f' },
+        'CRITICAL': { label: 'Crítica', color: '#9c27b0', border: '#9c27b0' }
+    };
+    
+    const priorityConfig = priorityMap[priority] || { label: priority, color: '#757575', border: '#757575' };
+    
+    return (
+        <Chip
+            size="small"
+            label={priorityConfig.label}
+            sx={{
+                color: priorityConfig.color,
+                border: `1px solid ${priorityConfig.border}`,
+                backgroundColor: 'transparent',
+                fontWeight: 500
+            }}
+            variant="outlined"
+        />
+    );
+};
+
+// Función para determinar si se permite crear nuevos partes
+const canCreateNewReport = (status) => {
+    return status !== 'RESOLVED' && status !== 'CLOSED';
 };
 
     return (
@@ -2392,37 +2506,31 @@ const handleIncidentInputChange = (e) => {
                                         width: 150,
                                         sortable: false,
                                         renderCell: (params) => (
-                                            <Box>
-                                                <IconButton 
-                                                    size="small" 
-                                                    title="Ver detalle"
-                                                    onClick={() => {
-                                                        setOpenIncidencesDialog(false);
-                                                        navigate(`/dashboard/incidents/${params.row.id}`);
-                                                    }}
-                                                >
-                                                    <Visibility fontSize="small" />
-                                                </IconButton>
-                                                <IconButton 
-                                                    size="small" 
-                                                    title="Editar"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleEditIncidentFromDialog(params.row);
-                                                    }}
-                                                >
-                                                    <Edit fontSize="small" />
-                                                </IconButton>
-                                                <IconButton 
-                                                    size="small" 
-                                                    title="Imprimir"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handlePrintIncidentFromDialog(params.row);
-                                                    }}
-                                                >
-                                                    <Print fontSize="small" />
-                                                </IconButton>
+                                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                                <Tooltip title="Ver detalle">
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleViewIncidentDetail(params.row)}
+                                                    >
+                                                        <Visibility fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Editar">
+                                                    <IconButton 
+                                                        size="small"
+                                                        onClick={() => handleEditIncidentFromDialog(params.row)}
+                                                    >
+                                                        <Edit fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Imprimir">
+                                                    <IconButton 
+                                                        size="small"
+                                                        onClick={() => handlePrintIncidentFromDialog(params.row)}
+                                                    >
+                                                        <Print fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </Box>
                                         )
                                     }
@@ -2537,6 +2645,209 @@ const handleIncidentInputChange = (e) => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+            )}
+
+            {/* Diálogo para mostrar el detalle de la incidencia */}
+            <Dialog 
+                open={openIncidentDetailDialog} 
+                onClose={() => setOpenIncidentDetailDialog(false)}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Box display="flex" alignItems="center">
+                            <Typography variant="h6">
+                                Incidencia #{selectedIncidentDetail?.id}: {selectedIncidentDetail?.title}
+                            </Typography>
+                        </Box>
+                        <IconButton onClick={() => setOpenIncidentDetailDialog(false)} size="small">
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent dividers>
+                    {loadingIncidentDetail ? (
+                        <Box display="flex" justifyContent="center" mt={3} mb={3}>
+                            <CircularProgress />
+                        </Box>
+                    ) : selectedIncidentDetail ? (
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} md={7}>
+                                <Paper sx={{ p: 2, height: '100%' }}>
+                                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                                        <Typography variant="h6">Detalles</Typography>
+                                        <Box display="flex" gap={1}>
+                                            {renderStatusChip(selectedIncidentDetail.status)}
+                                            {renderPriorityChip(selectedIncidentDetail.priority)}
+                                        </Box>
+                                    </Box>
+                                    <Divider sx={{ mb: 2 }} />
+                                    
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Cliente</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {selectedIncidentDetail.customer_name}
+                                                {customers.find(c => c.id === selectedIncidentDetail.customer)?.business_name && (
+                                                    <Typography variant="caption" display="block" color="text.secondary">
+                                                        {customers.find(c => c.id === selectedIncidentDetail.customer)?.business_name}
+                                                    </Typography>
+                                                )}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Fecha de creación</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {format(new Date(selectedIncidentDetail.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Reportada por</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {selectedIncidentDetail.reported_by_name || 'No especificado'}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="subtitle2">Última actualización</Typography>
+                                            <Typography variant="body1" gutterBottom>
+                                                {format(new Date(selectedIncidentDetail.updated_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                            </Typography>
+                                        </Grid>
+                                    </Grid>
+                                    
+                                    <Box mt={2}>
+                                        <Typography variant="subtitle2">Descripción</Typography>
+                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                            <Typography variant="body1">{selectedIncidentDetail.description}</Typography>
+                                        </Paper>
+                                    </Box>
+                                    
+                                    {selectedIncidentDetail.resolution_notes && (
+                                        <Box mt={2}>
+                                            <Typography variant="subtitle2">Notas de resolución</Typography>
+                                            <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                                <Typography variant="body1">{selectedIncidentDetail.resolution_notes}</Typography>
+                                            </Paper>
+                                        </Box>
+                                    )}
+                                </Paper>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={5}>
+                                <Paper sx={{ p: 2, height: '100%' }}>
+                                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                                        <Typography variant="h6">Partes de trabajo ({incidentReports.length})</Typography>
+                                    </Box>
+                                    <Divider sx={{ mb: 2 }} />
+                                    
+                                    {incidentReports.length > 0 ? (
+                                        <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                                            {incidentReports.map((report) => (
+                                                <Card key={report.id} sx={{ mb: 2 }}>
+                                                    <CardContent>
+                                                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                                Parte #{report.id}
+                                                            </Typography>
+                                                            <Chip 
+                                                                size="small" 
+                                                                label={report.status === 'DRAFT' ? 'Borrador' : 'Completado'} 
+                                                                color={report.status === 'DRAFT' ? 'warning' : 'success'} 
+                                                            />
+                                                        </Box>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Fecha: {format(new Date(report.date), 'dd/MM/yyyy', { locale: es })}
+                                                        </Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Horas trabajadas: {report.hours_worked || 'No especificado'}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            Técnicos: {report.technicians?.map(t => t.technician_name).join(', ') || 'Sin asignar'}
+                                                        </Typography>
+                                                        <Box mt={1}>
+                                                            <Button 
+                                                                size="small" 
+                                                                variant="outlined"
+                                                                onClick={() => {
+                                                                    setOpenIncidentDetailDialog(false);
+                                                                    navigate(`/dashboard/reports/${report.id}`);
+                                                                }}
+                                                            >
+                                                                Ver parte
+                                                            </Button>
+                                                        </Box>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body1" align="center" py={3}>
+                                            No hay partes de trabajo registrados para esta incidencia.
+                                        </Typography>
+                                    )}
+                                    
+                                    {canCreateNewReport(selectedIncidentDetail.status) ? (
+                                        <Box mt={2} display="flex" justifyContent="center">
+                                            <Button 
+                                                variant="contained" 
+                                                onClick={() => {
+                                                    setOpenIncidentDetailDialog(false);
+                                                    navigate(`/dashboard/incidents/${selectedIncidentDetail.id}/new-report`);
+                                                }}
+                                            >
+                                                Crear nuevo parte
+                                            </Button>
+                                        </Box>
+                                    ) : (
+                                        <Box mt={2} p={2} bgcolor="rgba(0, 0, 0, 0.04)" borderRadius={1} textAlign="center">
+                                            <Typography variant="body2" color="text.secondary">
+                                                No se pueden crear nuevos partes de trabajo para incidencias {selectedIncidentDetail.status === 'RESOLVED' ? 'resueltas' : 'cerradas'}.
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                </Paper>
+                            </Grid>
+                        </Grid>
+                    ) : (
+                        <Typography variant="body1" align="center" py={3}>
+                            Error al cargar los detalles de la incidencia.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button 
+                        variant="outlined" 
+                        startIcon={<Edit />}
+                        onClick={() => {
+                            setOpenIncidentDetailDialog(false);
+                            handleEditIncidentFromDialog(selectedIncidentDetail);
+                        }}
+                    >
+                        Editar
+                    </Button>
+                    <Button 
+                        variant="outlined"
+                        startIcon={<Print />}
+                        onClick={() => {
+                            setOpenIncidentDetailDialog(false);
+                            handlePrintIncidentFromDialog(selectedIncidentDetail);
+                        }}
+                    >
+                        Imprimir
+                    </Button>
+                    <Button onClick={() => setOpenIncidentDetailDialog(false)}>Cerrar</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Diálogo de reportes */}
+            {selectedIncidentDetail && (
+                <ReportDialog
+                    open={openReportDialog}
+                    onClose={() => setOpenReportDialog(false)}
+                    incident={selectedIncidentDetail}
+                    onReportSelect={(reportId) => navigate(`/dashboard/reports/${reportId}`)}
+                />
             )}
         </>
     );

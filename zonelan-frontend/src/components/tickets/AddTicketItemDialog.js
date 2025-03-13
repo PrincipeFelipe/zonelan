@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import axios from '../../utils/axiosConfig';
 import { useTickets } from '../../hooks/useTickets';
 import { formatCurrency } from '../../utils/helpers';
+import LocationSelector from '../materials/LocationSelector'; // Importar el componente LocationSelector
 
 const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
     const [materials, setMaterials] = useState([]);
@@ -18,10 +19,14 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
         material: '',
         quantity: 1,
         discount_percentage: 0,
-        notes: ''
+        notes: '',
+        location_id: null // Añadir campo para la ubicación
     });
     const [selectedMaterial, setSelectedMaterial] = useState(null);
     const { addTicketItem } = useTickets();
+    
+    // Estados para el selector de ubicación
+    const [openLocationSelector, setOpenLocationSelector] = useState(false);
 
     useEffect(() => {
         if (open) {
@@ -58,7 +63,8 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
             material: '',
             quantity: 1,
             discount_percentage: 0,
-            notes: ''
+            notes: '',
+            location_id: null
         });
         setSelectedMaterial(null);
     };
@@ -95,11 +101,13 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
             setFormData(prev => ({
                 ...prev,
                 material: '',
-                unit_price: 0
+                unit_price: 0,
+                location_id: null
             }));
         }
     };
 
+    // Modificar el handleSubmit para usar el selector de ubicación
     const handleSubmit = async () => {
         // Validaciones
         if (!formData.material) {
@@ -118,16 +126,38 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
             return;
         }
 
+        // Abrir el selector de ubicación
+        setOpenLocationSelector(true);
+    };
+    
+    // Función para procesar la ubicación seleccionada
+    const handleLocationSelected = async (location) => {
         try {
             setLoading(true);
-            await addTicketItem(ticketId, formData);
+            setOpenLocationSelector(false);
+            
+            // Agregar la ubicación al formData
+            const dataToSubmit = {
+                ...formData,
+                location_id: location.id
+            };
+            
+            // Enviar al servidor
+            await addTicketItem(ticketId, dataToSubmit);
             onSuccess && onSuccess();
             resetForm();
+            onClose();
         } catch (error) {
             console.error('Error al añadir producto al ticket:', error);
+            toast.error(error.response?.data?.detail || 'Error al añadir producto', { position: 'top-right' });
         } finally {
             setLoading(false);
         }
+    };
+
+    // Cancelar la selección de ubicación
+    const handleCancelLocationSelection = () => {
+        setOpenLocationSelector(false);
     };
 
     const calculateTotal = () => {
@@ -150,142 +180,154 @@ const AddTicketItemDialog = ({ open, onClose, onSuccess, ticketId }) => {
     const noMaterialsAvailable = materialsWithStock.length === 0;
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Añadir Producto</DialogTitle>
-            <DialogContent>
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                    <Grid item xs={12}>
-                        {noMaterialsAvailable ? (
-                            <Typography color="text.secondary" sx={{ mb: 2 }}>
-                                No hay materiales disponibles en stock.
-                            </Typography>
-                        ) : materialLoading ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={20} />
-                                <Typography variant="body2">Cargando materiales...</Typography>
-                            </Box>
-                        ) : (
-                            <Autocomplete
-                                fullWidth
-                                options={materialsWithStock}
-                                getOptionLabel={(option) => `${option.name} (Stock: ${option.quantity}) - ${formatCurrency(option.price)}`}
-                                renderInput={(params) => <TextField {...params} label="Buscar material" />}
-                                onChange={handleMaterialChange}
-                                value={selectedMaterial}
-                                isOptionEqualToValue={(option, value) => option && value && option.id === value.id}
-                                filterOptions={(options, state) => {
-                                    const inputValue = state.inputValue.toLowerCase().trim();
-                                    if (inputValue === '') return options;
-                                    
-                                    return options.filter(option => 
-                                        option.name.toLowerCase().includes(inputValue)
-                                    );
-                                }}
-                            />
-                        )}
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            name="quantity"
-                            label="Cantidad"
-                            type="number"
-                            value={formData.quantity}
-                            onChange={handleInputChange}
-                            InputProps={{
-                                inputProps: { 
-                                    min: 1, 
-                                    max: selectedMaterial?.quantity || 999,
-                                    step: 1
-                                }
-                            }}
-                            disabled={!selectedMaterial}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            name="discount_percentage"
-                            label="Descuento (%)"
-                            type="number"
-                            value={formData.discount_percentage}
-                            onChange={handleInputChange}
-                            InputProps={{
-                                inputProps: { min: 0, max: 100, step: 1 },
-                                endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                            }}
-                            disabled={!selectedMaterial}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            name="notes"
-                            label="Notas"
-                            multiline
-                            rows={2}
-                            value={formData.notes}
-                            onChange={handleInputChange}
-                        />
-                    </Grid>
-                </Grid>
-
-                {selectedMaterial && (
-                    <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                        <Typography variant="subtitle1" gutterBottom>
-                            Resumen
-                        </Typography>
-                        <Grid container spacing={1}>
-                            <Grid item xs={6}>
-                                <Typography variant="body2">Precio unitario:</Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                                <Typography variant="body2" align="right">{formatCurrency(selectedMaterial.price)}</Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                                <Typography variant="body2">Cantidad:</Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                                <Typography variant="body2" align="right">{formData.quantity}</Typography>
-                            </Grid>
-                            {parseFloat(formData.discount_percentage) > 0 && (
-                                <>
-                                    <Grid item xs={6}>
-                                        <Typography variant="body2">Descuento:</Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="body2" align="right">{formData.discount_percentage}%</Typography>
-                                    </Grid>
-                                </>
+        <>
+            <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+                <DialogTitle>Añadir Producto</DialogTitle>
+                <DialogContent>
+                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                        <Grid item xs={12}>
+                            {noMaterialsAvailable ? (
+                                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                    No hay materiales disponibles en stock.
+                                </Typography>
+                            ) : materialLoading ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CircularProgress size={20} />
+                                    <Typography variant="body2">Cargando materiales...</Typography>
+                                </Box>
+                            ) : (
+                                <Autocomplete
+                                    fullWidth
+                                    options={materialsWithStock}
+                                    getOptionLabel={(option) => `${option.name} (Stock: ${option.quantity}) - ${formatCurrency(option.price)}`}
+                                    renderInput={(params) => <TextField {...params} label="Buscar material" />}
+                                    onChange={handleMaterialChange}
+                                    value={selectedMaterial}
+                                    isOptionEqualToValue={(option, value) => option && value && option.id === value.id}
+                                    filterOptions={(options, state) => {
+                                        const inputValue = state.inputValue.toLowerCase().trim();
+                                        if (inputValue === '') return options;
+                                        
+                                        return options.filter(option => 
+                                            option.name.toLowerCase().includes(inputValue)
+                                        );
+                                    }}
+                                />
                             )}
-                            <Grid item xs={12}>
-                                <hr style={{ margin: '8px 0' }} />
-                            </Grid>
-                            <Grid item xs={6}>
-                                <Typography variant="subtitle2">Total:</Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                                <Typography variant="subtitle2" align="right">{formatCurrency(calculateTotal())}</Typography>
-                            </Grid>
                         </Grid>
-                    </Box>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} disabled={loading}>Cancelar</Button>
-                <Button 
-                    onClick={handleSubmit} 
-                    variant="contained" 
-                    color="primary" 
-                    disabled={loading || !selectedMaterial || formData.quantity <= 0}
-                >
-                    {loading ? <CircularProgress size={24} /> : "Añadir"}
-                </Button>
-            </DialogActions>
-        </Dialog>
+
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                name="quantity"
+                                label="Cantidad"
+                                type="number"
+                                value={formData.quantity}
+                                onChange={handleInputChange}
+                                InputProps={{
+                                    inputProps: { 
+                                        min: 1, 
+                                        max: selectedMaterial?.quantity || 999,
+                                        step: 1
+                                    }
+                                }}
+                                disabled={!selectedMaterial}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                name="discount_percentage"
+                                label="Descuento (%)"
+                                type="number"
+                                value={formData.discount_percentage}
+                                onChange={handleInputChange}
+                                InputProps={{
+                                    inputProps: { min: 0, max: 100, step: 1 },
+                                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                }}
+                                disabled={!selectedMaterial}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth
+                                name="notes"
+                                label="Notas"
+                                multiline
+                                rows={2}
+                                value={formData.notes}
+                                onChange={handleInputChange}
+                            />
+                        </Grid>
+                    </Grid>
+
+                    {selectedMaterial && (
+                        <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Resumen
+                            </Typography>
+                            <Grid container spacing={1}>
+                                <Grid item xs={6}>
+                                    <Typography variant="body2">Precio unitario:</Typography>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Typography variant="body2" align="right">{formatCurrency(selectedMaterial.price)}</Typography>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Typography variant="body2">Cantidad:</Typography>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Typography variant="body2" align="right">{formData.quantity}</Typography>
+                                </Grid>
+                                {parseFloat(formData.discount_percentage) > 0 && (
+                                    <>
+                                        <Grid item xs={6}>
+                                            <Typography variant="body2">Descuento:</Typography>
+                                        </Grid>
+                                        <Grid item xs={6}>
+                                            <Typography variant="body2" align="right">{formData.discount_percentage}%</Typography>
+                                        </Grid>
+                                    </>
+                                )}
+                                <Grid item xs={12}>
+                                    <hr style={{ margin: '8px 0' }} />
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Typography variant="subtitle2">Total:</Typography>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Typography variant="subtitle2" align="right">{formatCurrency(calculateTotal())}</Typography>
+                                </Grid>
+                            </Grid>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={onClose} disabled={loading}>Cancelar</Button>
+                    <Button 
+                        onClick={handleSubmit} 
+                        variant="contained" 
+                        color="primary" 
+                        disabled={loading || !selectedMaterial || formData.quantity <= 0}
+                    >
+                        {loading ? <CircularProgress size={24} /> : "Continuar"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            
+            {/* Selector de ubicación */}
+            <LocationSelector
+                open={openLocationSelector}
+                onClose={handleCancelLocationSelection}
+                materialId={formData.material}
+                materialName={selectedMaterial?.name}
+                quantity={formData.quantity || 0}
+                onSelectLocation={handleLocationSelected}
+            />
+        </>
     );
 };
 

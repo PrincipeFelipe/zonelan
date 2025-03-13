@@ -26,6 +26,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
 import Swal from 'sweetalert2';
+import LocationSelector from '../materials/LocationSelector';
 
 const ReportForm = () => {
     const navigate = useNavigate();
@@ -63,6 +64,8 @@ const ReportForm = () => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [imagesToDelete, setImagesToDelete] = useState([]);
     const [originalReport, setOriginalReport] = useState(null);
+    const [openLocationSelector, setOpenLocationSelector] = useState(false);
+    const [pendingMaterial, setPendingMaterial] = useState(null);
 
     useEffect(() => {
         fetchIncidents();
@@ -219,21 +222,13 @@ const ReportForm = () => {
             return;
         }
 
-        // Actualizar el estado con el nuevo material
-        setReport(prev => ({
-            ...prev,
-            materials_used: [...prev.materials_used, {
-                material: selectedMaterial.material,
-                quantity: selectedMaterial.quantity
-            }]
-        }));
-        
-        // Resetear el selector de materiales
-        setSelectedMaterial({ 
-            material: '', 
-            quantity: 1,
-            materialObject: null
+        // Guardar el material pendiente y abrir selector de ubicación
+        setPendingMaterial({
+            material: selectedMaterial.material,
+            quantity: selectedMaterial.quantity,
+            materialObject
         });
+        setOpenLocationSelector(true);
     };
 
     const handleRemoveMaterial = (materialId) => {
@@ -563,6 +558,32 @@ const ReportForm = () => {
             setImagesToDelete([]);
             toast.success('Imágenes restauradas');
         }
+    };
+
+    const handleLocationSelected = (location) => {
+        if (!pendingMaterial) return;
+        
+        // Actualizar el estado con el nuevo material y la ubicación seleccionada
+        setReport(prev => ({
+            ...prev,
+            materials_used: [...prev.materials_used, {
+                material: pendingMaterial.material,
+                quantity: pendingMaterial.quantity,
+                location_id: location.id,
+                location_name: `${location.warehouse_name} > ${location.department_name} > ${location.shelf_name} > ${location.tray_name}`
+            }]
+        }));
+        
+        // Resetear el selector de materiales
+        setSelectedMaterial({ 
+            material: '', 
+            quantity: 1,
+            materialObject: null
+        });
+        
+        // Limpiar material pendiente y cerrar el selector
+        setPendingMaterial(null);
+        setOpenLocationSelector(false);
     };
 
     // Verificar si hay materiales con stock disponible
@@ -1051,6 +1072,18 @@ const ReportForm = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            <LocationSelector
+                open={openLocationSelector}
+                onClose={() => {
+                    setOpenLocationSelector(false);
+                    setPendingMaterial(null);
+                }}
+                materialId={pendingMaterial?.material}
+                materialName={pendingMaterial?.materialObject?.name}
+                quantity={pendingMaterial?.quantity || 0}
+                onSelectLocation={handleLocationSelected}
+            />
         </Box>
     );
 };

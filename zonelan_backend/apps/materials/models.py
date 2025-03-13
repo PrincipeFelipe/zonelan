@@ -36,23 +36,25 @@ class Material(models.Model):
 
 class MaterialControl(models.Model):
     OPERATION_CHOICES = [
-        ('ADD', 'Añadir'),
-        ('REMOVE', 'Quitar'),
+        ('ADD', 'Entrada'),
+        ('REMOVE', 'Salida'),
+        ('TRANSFER', 'Traslado'),  # Añadir esta opción
     ]
     
     REASON_CHOICES = [
         ('COMPRA', 'Compra'),
-        ('VENTA', 'Venta'),
+        ('DEVOLUCION', 'Devolución'),
         ('RETIRADA', 'Retirada'),
-        ('USO', 'Uso en reporte'),
-        ('DEVOLUCION', 'Devolución')
+        ('VENTA', 'Venta'),
+        ('USO', 'Uso'),
+        ('TRASLADO', 'Traslado'),  # Añadir esta opción para razones
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Usuario')
     material = models.ForeignKey(Material, on_delete=models.CASCADE, verbose_name='Material')
     quantity = models.IntegerField(verbose_name='Cantidad')
     operation = models.CharField(
-        max_length=6, 
+        max_length=10, 
         choices=OPERATION_CHOICES, 
         default='ADD',
         verbose_name='Operación'
@@ -87,13 +89,46 @@ class MaterialControl(models.Model):
         verbose_name='Imagen de albarán'
     )
     date = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
+    
+    # Añadir campo para referencia de ubicación
+    location_reference = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        verbose_name="Referencia de ubicación"
+    )
+    
+    # Comentar o eliminar temporalmente esta FK
+    # movement = models.ForeignKey(
+    #     'storage.MaterialMovement',
+    #     on_delete=models.SET_NULL,
+    #     null=True,
+    #     blank=True,
+    #     related_name='material_controls',
+    #     verbose_name='Movimiento asociado'
+    # )
+    
+    # Mantener este campo simple
+    movement_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='ID del movimiento asociado'
+    )
 
     class Meta:
         verbose_name = 'Control de Material'
         verbose_name_plural = 'Control de Materiales'
 
     def __str__(self):
-        operation_text = 'Entrada' if self.operation == 'ADD' else 'Salida'
+        if self.operation == 'ADD':
+            operation_text = 'Entrada'
+        elif self.operation == 'REMOVE':
+            operation_text = 'Salida'
+        elif self.operation == 'TRANSFER':
+            operation_text = 'Traslado'
+        else:
+            operation_text = self.operation
+        
         reason_text = dict(self.REASON_CHOICES).get(self.reason, self.reason)
         
         # Referencias a reportes o tickets
@@ -111,4 +146,23 @@ class MaterialControl(models.Model):
                 ref_text = " - Ticket (eliminado)"
         
         has_invoice = " [Con albarán]" if self.invoice_image else ""
-        return f"{self.material.name} - {operation_text} ({reason_text}){ref_text}{has_invoice} - {self.date.strftime('%d/%m/%Y %H:%M')}"
+        
+        # Añadir referencia de ubicación si existe
+        location_text = f" - {self.location_reference}" if self.location_reference else ""
+        
+        return f"{self.material.name} - {operation_text} ({reason_text}){ref_text}{location_text}{has_invoice} - {self.date.strftime('%d/%m/%Y %H:%M')}"
+    
+    def get_movement(self):
+        """
+        Obtiene el objeto MaterialMovement relacionado si existe
+        """
+        if not self.movement_id:
+            return None
+            
+        # Import inside the method to avoid circular imports
+        from apps.storage.models import MaterialMovement
+        
+        try:
+            return MaterialMovement.objects.get(id=self.movement_id)
+        except MaterialMovement.DoesNotExist:
+            return None

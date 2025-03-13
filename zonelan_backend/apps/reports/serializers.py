@@ -71,6 +71,7 @@ class WorkReportSerializer(serializers.ModelSerializer):
         for material_data in materials_data:
             material_id = material_data.get('material')
             quantity = material_data.get('quantity')
+            location_id = material_data.get('location_id')  # Nueva variable para obtener la ubicación
             
             if material_id and quantity:
                 material = Material.objects.get(id=material_id)
@@ -82,8 +83,31 @@ class WorkReportSerializer(serializers.ModelSerializer):
                     quantity=quantity
                 )
                 
-                # Actualizar stock
-                material.quantity -= quantity
+                # Verificar si se está usando una ubicación específica
+                if location_id:
+                    try:
+                        from apps.storage.models import MaterialLocation
+                        location = MaterialLocation.objects.get(id=location_id)
+                        
+                        # Verificar que la ubicación corresponde al material
+                        if location.material.id != int(material_id):
+                            raise ValidationError(f"La ubicación no corresponde al material seleccionado.")
+                        
+                        # Verificar que haya suficiente stock en la ubicación
+                        if location.quantity < int(quantity):
+                            raise ValidationError(f"No hay suficiente stock en la ubicación. Disponible: {location.quantity}")
+                        
+                        # Actualizar stock en ubicación
+                        location.quantity -= int(quantity)
+                        location.save()
+                        
+                        # En este caso, ya se descontará del stock total más abajo
+                    except MaterialLocation.DoesNotExist:
+                        # Si la ubicación no existe, seguir con la lógica normal
+                        pass
+                
+                # Actualizar stock total
+                material.quantity -= int(quantity)
                 material.save()
                 
                 # Registrar en el control de materiales
@@ -115,7 +139,7 @@ class WorkReportSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        request = self.context['request']
+        request = self.context.get('request')
         
         # Actualizar campos básicos
         for attr, value in validated_data.items():
@@ -141,20 +165,52 @@ class WorkReportSerializer(serializers.ModelSerializer):
         
         # Los materiales que se van a usar en la nueva versión del reporte
         new_materials = {}
+        
+        # Procesar materiales
         materials_data = json.loads(request.data.get('materials_used', '[]'))
         for material_data in materials_data:
             if material_data and 'material' in material_data and 'quantity' in material_data:
                 material_id = material_data['material']
                 quantity = int(material_data['quantity'])
+                location_id = material_data.get('location_id')  # Obtener la ubicación seleccionada
+                
                 new_materials[material_id] = quantity
+                
+                # Si es un material nuevo y se ha especificado una ubicación
+                if material_id not in current_materials and location_id:
+                    try:
+                        from apps.storage.models import MaterialLocation
+                        location = MaterialLocation.objects.get(id=location_id)
+                        
+                        # Verificar que la ubicación corresponde al material
+                        if location.material.id != material_id:
+                            raise ValidationError(f"La ubicación no corresponde al material seleccionado.")
+                        
+                        # Verificar que haya suficiente stock en la ubicación
+                        if location.quantity < quantity:
+                            raise ValidationError(f"No hay suficiente stock en la ubicación. Disponible: {location.quantity}")
+                        
+                        # Actualizar stock en ubicación
+                        location.quantity -= quantity
+                        location.save()
+                        
+                        # El stock total se manejará más adelante, no aquí
+                        # ELIMINAR ESTA PARTE:
+                        # from apps.materials.models import Material
+                        # material = Material.objects.get(id=material_id)
+                        # material.quantity -= quantity
+                        # material.save()
+                        
+                    except MaterialLocation.DoesNotExist:
+                        raise ValidationError(f"La ubicación especificada no existe.")
         
         # Identificar materiales que se van a eliminar (están en current pero no en new)
         for material_id, old_quantity in current_materials.items():
             if material_id not in new_materials:
-                # Material eliminado: registrar como DEVOLUCION
+                # Material eliminado: devolver al inventario
                 material = Material.objects.get(id=material_id)
                 
-                # Devolver el material al inventario
+                # Devolver al inventario
                 material.quantity += old_quantity
                 material.save()
                 
@@ -189,12 +245,20 @@ class WorkReportSerializer(serializers.ModelSerializer):
         # Identificar materiales que se van a añadir o aumentar (están en new pero no en current o con mayor cantidad)
         for material_id, new_quantity in new_materials.items():
             if material_id not in current_materials:
-                # Material nuevo: registrar como USO
+                # Material nuevo: registrar como USO, pero solo si no se ha procesado ya a través de location_id
                 material = Material.objects.get(id=material_id)
                 
-                # Reducir el inventario
-                material.quantity -= new_quantity
-                material.save()
+                # Aquí es donde se debe reducir el inventario general si no se ha usado location_id
+                location_id_used = False
+                for m_data in materials_data:
+                    if m_data.get('material') == material_id and m_data.get('location_id'):
+                        location_id_used = True
+                        break
+                
+                if not location_id_used:
+                    # Reducir el inventario solo si no se ha procesado a través de location_id
+                    material.quantity -= new_quantity
+                    material.save()
                 
                 # Registrar en el control como uso
                 MaterialControl.objects.create(

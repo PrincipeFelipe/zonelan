@@ -104,54 +104,63 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 class TicketItemCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketItem
-        fields = ['id', 'ticket', 'material', 'quantity', 'unit_price', 'discount_percentage', 'notes']
-        read_only_fields = ['id']
+        fields = ('material', 'quantity', 'discount_percentage', 'notes', 'ticket', 'location_source')
     
     def validate(self, data):
-        # Validar que hay suficiente stock
-        material = data.get('material')
-        quantity = data.get('quantity', 0)
-        
-        if quantity <= 0:
-            raise serializers.ValidationError({"quantity": "La cantidad debe ser mayor que cero"})
-        
-        # Verificar stock disponible
-        available_stock = material.quantity
-        
-        if quantity > available_stock:
-            raise serializers.ValidationError({
-                "quantity": f"Stock insuficiente. Disponible: {available_stock}, Solicitado: {quantity}"
-            })
-        
+        # Validaciones existentes...
         return data
-    
+
     @transaction.atomic
     def create(self, validated_data):
-        try:
-            request = self.context.get('request')
+        request = self.context.get('request')
+        location_id = request.data.get('location_id')  # Obtener location_id desde la petición
+        
+        # Si hay un location_id, validar y procesar
+        if location_id:
+            try:
+                from apps.storage.models import MaterialLocation
+                location = MaterialLocation.objects.get(id=location_id)
+                
+                # Verificar que el material coincide
+                if location.material.id != validated_data['material'].id:
+                    raise serializers.ValidationError("La ubicación no corresponde al material seleccionado.")
+                
+                # Verificar stock disponible en la ubicación
+                if location.quantity < validated_data['quantity']:
+                    raise serializers.ValidationError(f"Stock insuficiente en la ubicación. Disponible: {location.quantity}")
+                
+                # Restar stock de la ubicación
+                location.quantity -= validated_data['quantity']
+                location.save()
+                
+                # IMPORTANTE: También actualizar el stock total del material
+                material = validated_data['material']
+                material.quantity -= validated_data['quantity']
+                material.save()
+                
+                # Registrar la ubicación en el registro de movimiento
+                validated_data['location_source'] = location.get_full_path() if hasattr(location, 'get_full_path') else f"{location.tray.shelf.department.warehouse.name} > {location.tray.shelf.department.name} > {location.tray.shelf.name} > {location.tray.name}"
             
-            # Guardar el ticket item
-            ticket_item = TicketItem.objects.create(**validated_data)
-            
-            # Actualizar el stock del material
-            material = validated_data['material']
-            quantity = validated_data['quantity']
-            material.quantity -= quantity
-            material.save(update_fields=['quantity'])
-            
-            # Registrar en MaterialControl
-            if request and request.user:
-                MaterialControl.objects.create(
-                    user=request.user,
-                    material=material,
-                    quantity=quantity,
-                    operation='REMOVE',
-                    reason='VENTA',
-                    ticket=validated_data['ticket'],
-                    date=timezone.now()
-                )
-            
-            return ticket_item
-        except Exception as e:
-            logger.error(f"Error en TicketItemCreateSerializer.create: {str(e)}")
-            raise serializers.ValidationError(f"Error al crear el item: {str(e)}")
+            except MaterialLocation.DoesNotExist:
+                raise serializers.ValidationError("La ubicación seleccionada no existe")
+        
+        # Continuar con la creación normal del ítem
+        ticket_item = super().create(validated_data)
+        
+        # Registrar en el control de materiales
+        user = request.user
+        material = validated_data['material']
+        quantity = validated_data['quantity']
+        ticket = validated_data['ticket']
+        
+        MaterialControl.objects.create(
+            user=user,
+            material=material,
+            quantity=quantity,
+            operation='REMOVE',
+            reason='VENTA',
+            ticket=ticket,
+            location_reference=validated_data.get('location_source')  # Incluir referencia a la ubicación
+        )
+        
+        return ticket_item

@@ -266,6 +266,9 @@ const IncidentList = () => {
                 return;
             }
 
+            // Preparar el contenido HTML según el tipo de informe seleccionado
+            let htmlContent = '';
+
             // Informe Unificado
             if (result.isConfirmed) {
                 // Calcular totales
@@ -273,19 +276,19 @@ const IncidentList = () => {
                 
                 // Agrupar técnicos únicos
                 const uniqueTechnicians = [...new Set(reports.flatMap(report => 
-                    report.technicians.map(tech => tech.technician_name)
+                    report.technicians?.map(tech => tech.technician_name) || []
                 ))];
 
                 // Agrupar materiales
                 const materialsMap = new Map();
                 reports.forEach(report => {
-                    report.materials_used.forEach(material => {
+                    report.materials_used?.forEach(material => {
                         const current = materialsMap.get(material.material_name) || 0;
                         materialsMap.set(material.material_name, current + material.quantity);
                     });
                 });
 
-                const unifiedContent = `
+                htmlContent = `
                     <html>
                         <head>
                             <title>Informe Unificado - Incidencia #${incident.id}</title>
@@ -371,16 +374,9 @@ const IncidentList = () => {
                         </body>
                     </html>
                 `;
-
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(unifiedContent);
-                printWindow.document.close();
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
             } else {
-                // Informe Segregado (el existente)
-                const printContent = `
+                // Informe Segregado
+                htmlContent = `
                     <html>
                         <head>
                             <title>Informe de Incidencia #${incident.id}</title>
@@ -449,28 +445,27 @@ const IncidentList = () => {
                                         <div class="info-row"><span class="info-label">Fecha:</span> ${new Date(report.date).toLocaleDateString()}</div>
                                         <div class="info-row"><span class="info-label">Estado:</span> ${report.status === 'DRAFT' ? 'Borrador' : 'Completado'}</div>
                                         <div class="info-row"><span class="info-label">Horas trabajadas:</span> ${report.hours_worked || 'No especificadas'}</div>
-                                        <div class="info-row"><span class="info-label">Técnicos:</span> ${report.technicians.map(tech => tech.technician_name).join(', ') || 'Sin asignar'}</div>
-                                        <div class="info-row"><span class="info-label">Descripción:</span> ${report.description}</div>
-                                        ${report.materials_used.length > 0 ? `
-                                            <div class="info-row">
-                                                <span class="info-label">Materiales utilizados:</span>
-                                                <table>
-                                                    <thead>
+                                        <div class="info-row"><span class="info-label">Observaciones:</span> ${report.observations || 'No especificadas'}</div>
+                                        <div class="info-row"><span class="info-label">Técnicos:</span> ${report.technicians?.map(tech => tech.technician_name).join(', ') || 'No especificados'}</div>
+                                        
+                                        ${report.materials_used?.length > 0 ? `
+                                            <div class="info-row"><span class="info-label">Materiales utilizados:</span></div>
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Material</th>
+                                                        <th>Cantidad</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${report.materials_used.map(material => `
                                                         <tr>
-                                                            <th>Material</th>
-                                                            <th>Cantidad</th>
+                                                            <td>${material.material_name}</td>
+                                                            <td>${material.quantity}</td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        ${report.materials_used.map(material => `
-                                                            <tr>
-                                                                <td>${material.material_name}</td>
-                                                                <td>${material.quantity}</td>
-                                                            </tr>
-                                                        `).join('')}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
                                         ` : ''}
                                     </div>
                                 `).join('')}
@@ -478,14 +473,30 @@ const IncidentList = () => {
                         </body>
                     </html>
                 `;
-
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(printContent);
-                printWindow.document.close();
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
             }
+
+            // Crear un iframe oculto
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            // Escribir el contenido HTML en el iframe
+            const iframeDoc = iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(htmlContent);
+            iframeDoc.close();
+            
+            // Esperar a que se cargue el contenido
+            setTimeout(() => {
+                // Lanzar el diálogo de impresión del navegador
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                
+                // Eliminar el iframe después de un tiempo
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 1000);
+            }, 500);
         } catch (error) {
             console.error('Error al imprimir:', error);
             toast.error('Error al generar el informe');

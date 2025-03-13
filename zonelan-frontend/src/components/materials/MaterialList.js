@@ -13,9 +13,6 @@ import {
     MenuItem,
     FormHelperText,
     InputAdornment,
-    Accordion, 
-    AccordionSummary, 
-    AccordionDetails,
     FormControl,
     InputLabel,
     Select,
@@ -28,22 +25,19 @@ import Swal from 'sweetalert2';
 import axios from '../../utils/axiosConfig';
 import authService from '../../services/authService';
 import MaterialHistory from './MaterialHistory';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { 
-    getWarehouses, 
-    getDepartments, 
-    getShelves, 
-    getTrays,
     createMaterialLocation
 } from '../../services/storageService';
 // Añadir el import
 import MaterialLocationAssign from './MaterialLocationAssign';
+// Primero añadir el import al inicio del archivo
+import LocationSelector from './LocationSelector';
 
 const MaterialList = () => {
     const [materials, setMaterials] = useState([]);
     const [openDialog, setOpenDialog] = useState(false);
     const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
-    const [selectedMaterial, setSelectedMaterial] = useState(null);
+    const [selectedMaterial, setSelectedMaterial] = useState(null); // Mantén esta primera declaración
     const [editMode, setEditMode] = useState(false);
     const [newMaterial, setNewMaterial] = useState({
         name: '',
@@ -71,55 +65,16 @@ const MaterialList = () => {
     const [invoicePreview, setInvoicePreview] = useState('');
     const fileInputRef = useRef();
 
-    const [assignLocation, setAssignLocation] = useState(false);
-    const [warehouses, setWarehouses] = useState([]);
-    const [departments, setDepartments] = useState([]);
-    const [shelves, setShelves] = useState([]);
-    const [trays, setTrays] = useState([]);
-    const [selectedWarehouse, setSelectedWarehouse] = useState('');
-    const [selectedDepartment, setSelectedDepartment] = useState('');
-    const [selectedShelf, setSelectedShelf] = useState('');
-    const [selectedTray, setSelectedTray] = useState('');
-    const [locationQuantity, setLocationQuantity] = useState(1);
-    const [minimumQuantity, setMinimumQuantity] = useState(0);
-
-    // Añadir el estado para el diálogo de ubicación
+    // Conservar estos estados para el LocationSelector
+    const [openLocationSelectorDialog, setOpenLocationSelectorDialog] = useState(false);
+    const [pendingOperation, setPendingOperation] = useState(null);
+    
+    // Mantener estos estados para la asignación desde la grid
     const [openLocationDialog, setOpenLocationDialog] = useState(false);
 
     useEffect(() => {
         fetchMaterials();
     }, []);
-
-    useEffect(() => {
-        fetchWarehouses();
-    }, []);
-
-    useEffect(() => {
-        if (selectedWarehouse) {
-            fetchDepartments(selectedWarehouse);
-        } else {
-            setDepartments([]);
-            setSelectedDepartment('');
-        }
-    }, [selectedWarehouse]);
-
-    useEffect(() => {
-        if (selectedDepartment) {
-            fetchShelves(selectedDepartment);
-        } else {
-            setShelves([]);
-            setSelectedShelf('');
-        }
-    }, [selectedDepartment]);
-
-    useEffect(() => {
-        if (selectedShelf) {
-            fetchTrays(selectedShelf);
-        } else {
-            setTrays([]);
-            setSelectedTray('');
-        }
-    }, [selectedShelf]);
 
     const columns = [
         { 
@@ -204,42 +159,6 @@ const MaterialList = () => {
         }
     };
 
-    const fetchWarehouses = async () => {
-        try {
-            const data = await getWarehouses();
-            setWarehouses(data);
-        } catch (error) {
-            console.error('Error al cargar almacenes:', error);
-        }
-    };
-
-    const fetchDepartments = async (warehouseId) => {
-        try {
-            const data = await getDepartments({ warehouse: warehouseId });
-            setDepartments(data);
-        } catch (error) {
-            console.error('Error al cargar dependencias:', error);
-        }
-    };
-
-    const fetchShelves = async (departmentId) => {
-        try {
-            const data = await getShelves({ department: departmentId });
-            setShelves(data);
-        } catch (error) {
-            console.error('Error al cargar estanterías:', error);
-        }
-    };
-
-    const fetchTrays = async (shelfId) => {
-        try {
-            const data = await getTrays({ shelf: shelfId });
-            setTrays(data);
-        } catch (error) {
-            console.error('Error al cargar baldas:', error);
-        }
-    };
-
     const handleOpenDialog = (material = null) => {
         if (material) {
             setEditMode(true);
@@ -267,13 +186,6 @@ const MaterialList = () => {
         setEditMode(false);
         setSelectedMaterial(null);
         clearImage();
-        setAssignLocation(false);
-        setSelectedWarehouse('');
-        setSelectedDepartment('');
-        setSelectedShelf('');
-        setSelectedTray('');
-        setLocationQuantity(1);
-        setMinimumQuantity(0);
     };
 
     // Modificar handleInputChange para manejar los nuevos campos
@@ -308,7 +220,7 @@ const MaterialList = () => {
         }
     };
 
-    // Modificar handleSubmit para manejar la cantidad correctamente
+    // Modificar handleSubmit para incluir la implementación de creación de material
     const handleSubmit = async () => {
         try {
             if (!newMaterial.name || isNaN(parseFloat(newMaterial.price)) || parseFloat(newMaterial.price) < 0) {
@@ -319,9 +231,6 @@ const MaterialList = () => {
                 });
                 return;
             }
-
-            // Preparar el FormData para enviar datos
-            const formData = new FormData();
 
             // Variable para almacenar la respuesta
             let materialResponse;
@@ -341,83 +250,84 @@ const MaterialList = () => {
                         return;
                     }
                     
-                    // Resto del código para procesar el cambio de cantidad...
-                    const currentQuantity = parseInt(newMaterial.quantity);
-                    let operationReason;
-
-                    if (quantityChange.operation === 'add') {
-                        // Si es add, el motivo puede ser COMPRA o DEVOLUCION según lo seleccionado
-                        operationReason = reasonType;
-                        
-                        // Solo permitir imagen para compras
-                        if (reasonType === 'COMPRA' && invoiceImage) {
-                            formData.append('invoice_image', invoiceImage);
-                        }
-                    } else {
-                        // Si es subtract, el motivo será VENTA o RETIRADA según lo seleccionado
-                        operationReason = withdrawalType;
-                        
-                        // Validar que no quede negativo
-                        if (currentQuantity - changeAmount < 0) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: 'No hay suficiente cantidad disponible para esta operación'
-                            });
-                            return;
-                        }
+                    // Si es una resta, verificar ubicaciones
+                    if (quantityChange.operation === 'subtract') {
+                        // Guardar operación pendiente y abrir selector de ubicación
+                        setPendingOperation({
+                            type: 'edit',
+                            material: selectedMaterial,
+                            quantity: changeAmount,
+                            operation: quantityChange.operation,
+                            reason: withdrawalType
+                        });
+                        setOpenLocationSelectorDialog(true);
+                        return;
                     }
-
-                    // Añadir campos al FormData
+                    
+                    // Preparar el FormData para enviar datos
+                    const formData = new FormData();
                     formData.append('name', newMaterial.name);
                     formData.append('price', parseFloat(newMaterial.price));
                     formData.append('operation', quantityChange.operation === 'add' ? 'ADD' : 'REMOVE');
                     formData.append('quantity_change', changeAmount);
-                    formData.append('reason', operationReason);
+                    formData.append('reason', reasonType);
+                    
+                    // Añadir imagen de albarán si existe y es una compra
+                    if (invoiceImage && quantityChange.operation === 'add' && reasonType === 'COMPRA') {
+                        formData.append('invoice_image', invoiceImage);
+                    }
+                    
+                    // Actualizar el material
+                    await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                    
+                    toast.success('Material actualizado correctamente');
                 } else {
-                    // Si no hay cambio de cantidad, solo actualizar nombre y precio
+                    // Actualizar solo los datos básicos sin cambiar cantidad
+                    const formData = new FormData();
                     formData.append('name', newMaterial.name);
                     formData.append('price', parseFloat(newMaterial.price));
+                    
+                    await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                    
+                    toast.success('Material actualizado correctamente');
+                }
+            } else {
+                // Código para crear un nuevo material
+                const formData = new FormData();
+                formData.append('name', newMaterial.name);
+                formData.append('quantity', parseInt(newMaterial.quantity) || 0);
+                formData.append('price', parseFloat(newMaterial.price) || 0);
+                formData.append('reason', 'COMPRA'); // Razón por defecto para nuevos materiales
+                
+                // Añadir imagen de albarán si existe
+                if (invoiceImage) {
+                    formData.append('invoice_image', invoiceImage);
                 }
                 
-                // Actualizar el material
-                materialResponse = await axios.put(`/materials/materials/${selectedMaterial.id}/`, formData, {
+                // Crear el material
+                const response = await axios.post('/materials/materials/', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
                 });
-                toast.success('Material actualizado correctamente');
-            } else {
-                // Código existente para crear nuevo material...
+                
+                toast.success('Material creado correctamente');
             }
 
-            // Procesar la asignación de ubicación INDEPENDIENTEMENTE del cambio de cantidad
-            if (assignLocation && selectedTray) {
-                try {
-                    const locationData = {
-                        material: editMode ? selectedMaterial.id : materialResponse.data.id,
-                        tray: parseInt(selectedTray),
-                        quantity: parseInt(locationQuantity),
-                        minimum_quantity: parseInt(minimumQuantity)
-                    };
-                    
-                    if (locationQuantity <= 0) {
-                        toast.error('La cantidad para la ubicación debe ser mayor que cero');
-                        return;
-                    }
-                    
-                    await createMaterialLocation(locationData);
-                    toast.success('Material ubicado correctamente');
-                } catch (locationError) {
-                    console.error('Error al crear ubicación:', locationError);
-                    toast.error('Error al asignar ubicación. Revise las ubicaciones en el módulo de almacenamiento');
-                }
-            }
-            
             handleCloseDialog();
             fetchMaterials();
         } catch (error) {
-            // Manejar errores...
+            console.error('Error al guardar material:', error);
+            const errorMessage = error.response?.data?.detail || 'Error al guardar el material';
+            toast.error(errorMessage);
         }
     };
 
@@ -452,6 +362,49 @@ const MaterialList = () => {
     const handleAssignLocation = (material) => {
         setSelectedMaterial(material);
         setOpenLocationDialog(true);
+    };
+
+    // Añadir esta función para manejar la selección de ubicación
+    const handleLocationSelected = async (location) => {
+        try {
+            setOpenLocationSelectorDialog(false);
+            
+            if (!pendingOperation) return;
+            
+            const { type, material, quantity, operation, reason } = pendingOperation;
+            
+            // Preparar el FormData para enviar datos
+            const formData = new FormData();
+            
+            if (type === 'edit') {
+                // Usar los datos del material seleccionado
+                formData.append('name', material.name);
+                formData.append('price', parseFloat(material.price));
+                formData.append('operation', 'REMOVE');
+                formData.append('quantity_change', quantity);
+                formData.append('reason', reason);
+                formData.append('location_id', location.id);
+                
+                // Actualizar el material
+                await axios.put(`/materials/materials/${material.id}/`, formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                
+                toast.success('Material actualizado correctamente');
+            }
+            
+            // Limpiar la operación pendiente
+            setPendingOperation(null);
+            
+            // Cerrar diálogos y recargar datos
+            handleCloseDialog();
+            fetchMaterials();
+        } catch (error) {
+            console.error('Error al procesar la operación:', error);
+            toast.error('Error al procesar la operación');
+        }
     };
 
     // Definir la localización en español
@@ -765,114 +718,6 @@ const MaterialList = () => {
                         }}
                     />
 
-                    <Accordion 
-                        sx={{ mt: 2 }}
-                        expanded={assignLocation}
-                        onChange={(e, expanded) => setAssignLocation(expanded)}
-                    >
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Typography>Asignar ubicación</Typography>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12}>
-                                    <FormControl fullWidth required>
-                                        <InputLabel>Almacén</InputLabel>
-                                        <Select
-                                            value={selectedWarehouse}
-                                            label="Almacén *"
-                                            onChange={(e) => setSelectedWarehouse(e.target.value)}
-                                        >
-                                            <MenuItem value="">Seleccione un almacén</MenuItem>
-                                            {warehouses.map((warehouse) => (
-                                                <MenuItem key={warehouse.id} value={warehouse.id}>
-                                                    {warehouse.name}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                
-                                <Grid item xs={12}>
-                                    <FormControl fullWidth required disabled={!selectedWarehouse}>
-                                        <InputLabel>Dependencia</InputLabel>
-                                        <Select
-                                            value={selectedDepartment}
-                                            label="Dependencia *"
-                                            onChange={(e) => setSelectedDepartment(e.target.value)}
-                                        >
-                                            <MenuItem value="">Seleccione una dependencia</MenuItem>
-                                            {departments.map((department) => (
-                                                <MenuItem key={department.id} value={department.id}>
-                                                    {department.name}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                
-                                <Grid item xs={12}>
-                                    <FormControl fullWidth required disabled={!selectedDepartment}>
-                                        <InputLabel>Estantería</InputLabel>
-                                        <Select
-                                            value={selectedShelf}
-                                            label="Estantería *"
-                                            onChange={(e) => setSelectedShelf(e.target.value)}
-                                        >
-                                            <MenuItem value="">Seleccione una estantería</MenuItem>
-                                            {shelves.map((shelf) => (
-                                                <MenuItem key={shelf.id} value={shelf.id}>
-                                                    {shelf.name}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                
-                                <Grid item xs={12}>
-                                    <FormControl fullWidth required disabled={!selectedShelf}>
-                                        <InputLabel>Balda</InputLabel>
-                                        <Select
-                                            value={selectedTray}
-                                            label="Balda *"
-                                            onChange={(e) => setSelectedTray(e.target.value)}
-                                        >
-                                            <MenuItem value="">Seleccione una balda</MenuItem>
-                                            {trays.map((tray) => (
-                                                <MenuItem key={tray.id} value={tray.id}>
-                                                    {tray.name} {tray.full_code ? `(${tray.full_code})` : ''}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                
-                                <Grid item xs={6}>
-                                    <TextField
-                                        fullWidth
-                                        label="Cantidad en ubicación"
-                                        type="number"
-                                        value={locationQuantity}
-                                        onChange={(e) => setLocationQuantity(parseInt(e.target.value) || 0)}
-                                        InputProps={{ inputProps: { min: 1 } }}
-                                        helperText={editMode ? "Esta cantidad se añadirá/restará del stock total" : ""}
-                                    />
-                                </Grid>
-                                
-                                <Grid item xs={6}>
-                                    <TextField
-                                        fullWidth
-                                        label="Cantidad mínima"
-                                        type="number"
-                                        value={minimumQuantity}
-                                        onChange={(e) => setMinimumQuantity(parseInt(e.target.value) || 0)}
-                                        InputProps={{ inputProps: { min: 0 } }}
-                                        helperText="Para alertas de stock bajo"
-                                    />
-                                </Grid>
-                            </Grid>
-                        </AccordionDetails>
-                    </Accordion>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancelar</Button>
@@ -894,6 +739,15 @@ const MaterialList = () => {
                     if (refresh) fetchMaterials();
                 }}
                 material={selectedMaterial}
+            />
+            {/* Agregar el selector de ubicación */}
+            <LocationSelector
+                open={openLocationSelectorDialog}
+                onClose={() => setOpenLocationSelectorDialog(false)}
+                materialId={pendingOperation?.material?.id}
+                materialName={pendingOperation?.material?.name}
+                quantity={pendingOperation?.quantity || 0}
+                onSelectLocation={handleLocationSelected}
             />
         </>
     );

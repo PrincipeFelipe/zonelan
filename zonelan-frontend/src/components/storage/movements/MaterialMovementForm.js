@@ -70,6 +70,14 @@ const MaterialMovementForm = () => {
     notes: ''
   });
 
+  // Añadir un nuevo estado para almacenar todas las ubicaciones del material seleccionado
+  const [materialLocations, setMaterialLocations] = useState([]);
+  const [showMaterialLocations, setShowMaterialLocations] = useState(false);
+
+  // Añadir estos estados
+  const [loadingSourceHierarchy, setLoadingSourceHierarchy] = useState(false);
+  const [loadingTargetHierarchy, setLoadingTargetHierarchy] = useState(false);
+
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -86,6 +94,7 @@ const MaterialMovementForm = () => {
       fetchDepartments(selectedSourceWarehouse, 'source');
     } else {
       setSelectedSourceDepartment('');
+      setSourceDepartments([]);
     }
   }, [selectedSourceWarehouse]);
 
@@ -122,6 +131,7 @@ const MaterialMovementForm = () => {
       fetchDepartments(selectedTargetWarehouse, 'target');
     } else {
       setSelectedTargetDepartment('');
+      setTargetDepartments([]);
     }
   }, [selectedTargetWarehouse]);
 
@@ -205,6 +215,16 @@ const MaterialMovementForm = () => {
       }
     }
   }, [formData.material, selectedTargetTray, targetLocations]);
+
+  // Añadir este efecto para cargar las ubicaciones cuando cambie el material seleccionado
+  useEffect(() => {
+    if (formData.material) {
+      fetchMaterialLocationsForMaterial(formData.material);
+    } else {
+      setMaterialLocations([]);
+      setShowMaterialLocations(false);
+    }
+  }, [formData.material]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -359,6 +379,19 @@ const MaterialMovementForm = () => {
     }
   };
 
+  // Añadir esta función para obtener todas las ubicaciones de un material
+  const fetchMaterialLocationsForMaterial = async (materialId) => {
+    try {
+      const locationsData = await getMaterialLocations({ material: materialId });
+      const locationsWithStock = locationsData.filter(loc => loc.quantity > 0);
+      setMaterialLocations(locationsWithStock);
+      setShowMaterialLocations(locationsWithStock.length > 0);
+    } catch (error) {
+      console.error('Error al cargar ubicaciones del material:', error);
+      toast.error('Error al cargar ubicaciones del material');
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
@@ -414,10 +447,107 @@ const MaterialMovementForm = () => {
     }
   };
 
+  // Modificar la función handleSelectLocationAsSource
+const handleSelectLocationAsSource = async (location) => {
+  try {
+    setLoadingSourceHierarchy(true);
+    
+    // Obtener los datos completos en paralelo
+    const trayResponse = axios.get(`/storage/trays/${location.tray}/`);
+    
+    // Mientras se obtiene la respuesta, actualizar el ID del material y la ubicación de origen
+    setFormData(prev => ({
+      ...prev,
+      source_location: location.id,
+      material: location.material
+    }));
+    
+    // Esperar a que llegue la respuesta del tray
+    const trayData = (await trayResponse).data;
+    
+    // Obtener los datos de shelf y department en paralelo
+    const shelfResponse = axios.get(`/storage/shelves/${trayData.shelf}/`);
+    const shelfData = (await shelfResponse).data;
+    
+    const departmentResponse = axios.get(`/storage/departments/${shelfData.department}/`);
+    const departmentData = (await departmentResponse).data;
+    
+    // Ahora configurar la cascada de selecciones
+    setSelectedSourceWarehouse(departmentData.warehouse);
+    await fetchDepartments(departmentData.warehouse, 'source');
+    
+    setSelectedSourceDepartment(shelfData.department);
+    await fetchShelves(shelfData.department, 'source');
+    
+    setSelectedSourceShelf(trayData.shelf);
+    await fetchTrays(trayData.shelf, 'source');
+    
+    setSelectedSourceTray(location.tray);
+    await fetchLocations(location.tray, 'source');
+    
+    setSelectedSourceLocation(location.id);
+    
+    toast.success('Ubicación de origen seleccionada correctamente');
+  } catch (error) {
+    console.error('Error al seleccionar ubicación de origen:', error);
+    toast.error('Error al seleccionar la ubicación de origen');
+  } finally {
+    setLoadingSourceHierarchy(false);
+  }
+};
+
+// Modificar la función handleSelectLocationAsTarget
+const handleSelectLocationAsTarget = async (location) => {
+  try {
+    setLoadingTargetHierarchy(true);
+    
+    // Primero obtener los datos completos de cada nivel jerárquico
+    const trayData = await axios.get(`/storage/trays/${location.tray}/`);
+    const shelfData = await axios.get(`/storage/shelves/${trayData.data.shelf}/`);
+    const departmentData = await axios.get(`/storage/departments/${shelfData.data.department}/`);
+    
+    // Establecer el nivel superior primero
+    setSelectedTargetWarehouse(departmentData.data.warehouse);
+    
+    // Esperar a que se carguen los departamentos
+    await fetchDepartments(departmentData.data.warehouse, 'target');
+    setSelectedTargetDepartment(shelfData.data.department);
+    
+    // Esperar a que se carguen las estanterías
+    await fetchShelves(shelfData.data.department, 'target');
+    setSelectedTargetShelf(trayData.data.shelf);
+    
+    // Esperar a que se carguen las baldas
+    await fetchTrays(trayData.data.shelf, 'target');
+    setSelectedTargetTray(location.tray);
+    
+    // Actualizar el formulario
+    setFormData(prev => ({
+      ...prev,
+      target_location: location.id
+    }));
+    
+    toast.success('Ubicación de destino seleccionada correctamente');
+  } finally {
+    setLoadingTargetHierarchy(false);
+  }
+};
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validaciones según el tipo de operación
+    // Validaciones comunes
+    if (!formData.material) {
+      toast.error('Debe seleccionar un material');
+      return;
+    }
+    
+    if (formData.quantity <= 0) {
+      toast.error('La cantidad debe ser mayor que cero');
+      return;
+    }
+
+    // Validaciones específicas por tipo de operación
     if (formData.operation === 'TRANSFER') {
       if (!formData.source_location) {
         toast.error('Debe seleccionar una ubicación de origen');
@@ -427,11 +557,13 @@ const MaterialMovementForm = () => {
         toast.error('Debe seleccionar una ubicación de destino');
         return;
       }
-    } else if (formData.operation === 'ADD') {
-      if (!formData.material) {
-        toast.error('Debe seleccionar un material');
+      
+      // Validar que no sea la misma ubicación
+      if (formData.source_location && formData.source_location === formData.target_location) {
+        toast.error('Las ubicaciones de origen y destino no pueden ser la misma');
         return;
       }
+    } else if (formData.operation === 'ADD') {
       if (!formData.target_location && !formData.target_tray) {
         toast.error('Debe seleccionar una ubicación de destino');
         return;
@@ -443,9 +575,15 @@ const MaterialMovementForm = () => {
       }
     }
     
-    if (formData.quantity <= 0) {
-      toast.error('La cantidad debe ser mayor que cero');
-      return;
+    // Verificar stock disponible en la ubicación de origen
+    if (formData.source_location) {
+      const sourceLocation = sourceLocations.find(loc => loc.id === parseInt(formData.source_location)) || 
+                            materialLocations.find(loc => loc.id === parseInt(formData.source_location));
+      
+      if (sourceLocation && sourceLocation.quantity < formData.quantity) {
+        toast.error(`Stock insuficiente en la ubicación de origen. Disponible: ${sourceLocation.quantity}`);
+        return;
+      }
     }
     
     setSaving(true);
@@ -586,6 +724,90 @@ const MaterialMovementForm = () => {
                 </FormHelperText>
               </FormControl>
             </Grid>
+            
+            {showMaterialLocations && (
+  <Grid item xs={12}>
+    <Box sx={{ 
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 1,
+      p: 2,
+      mt: 2,
+      bgcolor: 'background.paper'
+    }}>
+      <Typography variant="subtitle1" gutterBottom>
+        Ubicaciones existentes del material
+      </Typography>
+      <Typography variant="body2" color="text.secondary" paragraph>
+        Seleccione una ubicación como origen o destino para su movimiento:
+      </Typography>
+      
+      <Grid container spacing={2}>
+        {materialLocations.map((location) => (
+          <Grid item xs={12} key={location.id}>
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={5}>
+                  <Typography variant="body2" fontWeight="medium">
+                    {location.warehouse_name} &gt; {location.department_name} &gt; {location.shelf_name} &gt; {location.tray_name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Código: {location.tray_full_code || 'No disponible'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} md={2} textAlign="center">
+                  <Typography variant="body2">
+                    Stock disponible:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {location.quantity}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} md={5} textAlign="right">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => handleSelectLocationAsSource(location)}
+                    disabled={formData.operation === 'ADD'}
+                    sx={{ mr: 1 }}
+                  >
+                    Usar como origen
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="secondary"
+                    onClick={() => handleSelectLocationAsTarget(location)}
+                    disabled={formData.operation === 'REMOVE'}
+                  >
+                    Usar como destino
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+        ))}
+        
+        {materialLocations.length === 0 && (
+          <Grid item xs={12}>
+            <Alert severity="info">
+              Este material no tiene ubicaciones con stock disponible.
+            </Alert>
+          </Grid>
+        )}
+      </Grid>
+    </Box>
+  </Grid>
+)}
             
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>

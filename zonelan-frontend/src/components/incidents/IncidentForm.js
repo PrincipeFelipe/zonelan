@@ -7,6 +7,7 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios from '../../utils/axiosConfig';
+import { API_ROUTES, buildResourceUrl } from '../../utils/apiRoutes';
 
 // Constantes para opciones de select
 const STATUS_CHOICES = [
@@ -63,7 +64,7 @@ const IncidentForm = ({ view = false }) => {
     const fetchIncident = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`/incidents/${id}/`);
+            const response = await axios.get(buildResourceUrl(API_ROUTES.INCIDENTS, id));
             setIncident(response.data);
             setError(null);
         } catch (err) {
@@ -90,10 +91,10 @@ const IncidentForm = ({ view = false }) => {
         try {
             setLoading(true);
             if (isEditing) {
-                await axios.put(`/incidents/${id}/`, incident);
+                await axios.put(`/incidents/incidents/${id}/`, incident);
                 toast.success('Incidencia actualizada correctamente');
             } else {
-                await axios.post('/incidents/', incident);
+                await axios.post('/incidents/incidents/', incident);
                 toast.success('Incidencia creada correctamente');
             }
             navigate('/dashboard/incidents');

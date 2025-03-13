@@ -145,9 +145,23 @@ export const deleteTray = async (id) => {
 };
 
 // Servicios para ubicaciones de materiales
-export const getMaterialLocations = async (params = {}) => {
-  const response = await axios.get('/storage/locations/', { params });
-  return response.data;
+export const getMaterialLocations = async (materialId, params = {}) => {
+  try {
+    // Si materialId se pasa como número, usarlo en la URL
+    if (materialId && typeof materialId !== 'object') {
+      const response = await axios.get(`/storage/materials/${materialId}/locations/`, { params });
+      return response.data;
+    } 
+    // Si se pasa un objeto de parámetros o materialId es un objeto, usarlo como params
+    else {
+      const queryParams = typeof materialId === 'object' ? materialId : params;
+      const response = await axios.get('/storage/locations/', { params: queryParams });
+      return response.data;
+    }
+  } catch (error) {
+    console.error('Error al obtener ubicaciones del material:', error);
+    throw error;
+  }
 };
 
 export const getMaterialLocationById = async (id) => {
@@ -183,8 +197,19 @@ export const createMaterialLocation = async (locationData) => {
 };
 
 export const updateMaterialLocation = async (id, data) => {
-  const response = await axios.put(`/storage/locations/${id}/`, data);
-  return response.data;
+  try {
+    console.log('Actualizando ubicación con datos:', data); // Añadir log
+    const response = await axios.put(`/storage/locations/${id}/`, data);
+    return response.data;
+  } catch (error) {
+    console.error('Error en updateMaterialLocation:', error);
+    
+    // Proveer información más detallada sobre el error
+    if (error.response && error.response.data) {
+      console.error('Respuesta de error del servidor:', error.response.data);
+    }
+    throw error;
+  }
 };
 
 export const deleteMaterialLocation = async (id) => {

@@ -250,21 +250,47 @@ const columns = [
         field: 'operation', 
         headerName: 'Operación', 
         width: 120,
-        renderCell: (params) => (
-            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                <Chip 
-                    size="small" 
-                    label={params.value === 'ADD' ? 'Entrada' : 'Salida'} 
-                    color={params.value === 'ADD' ? 'success' : 'error'}
-                    variant="outlined"
-                    sx={{ 
-                        border: `1px solid ${params.value === 'ADD' ? '#2e7d32' : '#d32f2f'}`,
-                        color: params.value === 'ADD' ? '#2e7d32' : '#d32f2f',
-                        backgroundColor: 'transparent'
-                    }}
-                />
-            </Box>
-        )
+        renderCell: (params) => {
+            const getOperationLabel = (op) => {
+                switch(op) {
+                    case 'ADD': return 'Entrada';
+                    case 'REMOVE': return 'Salida';
+                    case 'TRANSFER': return 'Traslado';
+                    default: return op;
+                }
+            };
+            
+            const getOperationColor = (op) => {
+                switch(op) {
+                    case 'ADD': return 'success';
+                    case 'REMOVE': return 'error';
+                    case 'TRANSFER': return 'info';
+                    default: return 'default';
+                }
+            };
+            
+            return (
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                    <Chip 
+                        size="small" 
+                        label={getOperationLabel(params.value)} 
+                        color={getOperationColor(params.value)}
+                        variant="outlined"
+                        sx={{ 
+                            border: `1px solid ${
+                                params.value === 'ADD' ? '#2e7d32' : 
+                                params.value === 'REMOVE' ? '#d32f2f' : 
+                                '#0288d1'
+                            }`,
+                            color: params.value === 'ADD' ? '#2e7d32' : 
+                                   params.value === 'REMOVE' ? '#d32f2f' : 
+                                   '#0288d1',
+                            backgroundColor: 'transparent'
+                        }}
+                    />
+                </Box>
+            )
+        }
     },
     { 
         field: 'reason', 
@@ -315,100 +341,98 @@ const columns = [
         field: 'reference', 
         headerName: 'Referencia', 
         width: 200,
-        flex: 1,
         renderCell: (params) => {
-            const row = params.row;
+            // Debug - quitar en producción
+            // debugInfo(params.row);
             
-            // 1. Verificar si hay albarán
-            if (row.invoice_url) {
-                return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                        <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<ReceiptOutlined />}
-                            onClick={() => handleViewInvoice(row.invoice_url)}
-                        >
-                            Ver Albarán
-                        </Button>
-                    </Box>
+            // Construir referencias según el tipo de referencia disponible
+            const references = [];
+            
+            // Referencia a reporte
+            if (params.row.report_id) {
+                references.push(
+                    <Link 
+                        href={`/dashboard/reports/${params.row.report_id}`} 
+                        key="report"
+                        underline="hover"
+                        color="primary"
+                    >
+                        Reporte #{params.row.report_id}
+                    </Link>
                 );
             }
             
-            // 2. Verificar si hay reporte
-            if (row.report) {
-                // Si el reporte está eliminado
-                if (row.report_deleted) {
-                    return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', gap: 0.5 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Reporte #{row.report}
-                            </Typography>
-                            <Chip
-                                label="Eliminado"
-                                size="small"
-                                color="default"
-                                variant="outlined"
-                                sx={{ fontSize: '0.65rem' }}
-                            />
-                        </Box>
-                    );
-                }
+            // Referencia a ticket
+            if (params.row.ticket_id) {
+                references.push(
+                    <Link 
+                        href={`/dashboard/tickets/${params.row.ticket_id}`}
+                        key="ticket" 
+                        underline="hover"
+                        color="primary"
+                    >
+                        Ticket #{params.row.ticket_id}
+                    </Link>
+                );
+            }
+            
+            // Referencia a movimiento - PRIORIZAR ESTA REFERENCIA SI EXISTE
+            if (params.row.movement_id && params.row.movement_id > 0) {
+                references.push(
+                    <Link 
+                        href={`/dashboard/storage/movements/${params.row.movement_id}`}
+                        key="movement" 
+                        underline="hover"
+                        color="primary"
+                    >
+                        Movimiento #{params.row.movement_id}
+                    </Link>
+                );
                 
-                // Si el reporte existe y no está eliminado
+                // Retornar SOLO el enlace al movimiento, sin el texto de ubicación
                 return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                        <Link 
-                            component={RouterLink} 
-                            to={`/dashboard/reports/${row.report}`}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                        >
-                            <AssignmentIcon fontSize="small" />
-                            Reporte #{row.report}
-                        </Link>
+                    <Box>
+                        {references.map((ref, index) => (
+                            <React.Fragment key={index}>
+                                {index > 0 && <Box sx={{ my: 0.5 }} />}
+                                {ref}
+                            </React.Fragment>
+                        ))}
                     </Box>
                 );
             }
             
-            // 3. Verificar si hay ticket
-            if (row.ticket) {
-                // Si el ticket está cancelado
-                if (row.ticket_canceled) {
-                    return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', gap: 0.5 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Ticket #{row.ticket}
-                            </Typography>
-                            <Chip
-                                label="Cancelado"
-                                size="small"
-                                color="error"
-                                variant="outlined"
-                                sx={{ fontSize: '0.65rem' }}
-                            />
-                        </Box>
-                    );
-                }
-                
-                // Si el ticket existe y no está cancelado
+            // Si hay ticket, tampoco mostrar la referencia de ubicación
+            if (params.row.ticket_id) {
                 return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                        <Link 
-                            component={RouterLink} 
-                            to={`/dashboard/tickets/${row.ticket}`}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                        >
-                            <ReceiptIcon fontSize="small" />
-                            Ticket #{row.ticket}
-                        </Link>
+                    <Box>
+                        {references.map((ref, index) => (
+                            <React.Fragment key={index}>
+                                {index > 0 && <Box sx={{ my: 0.5 }} />}
+                                {ref}
+                            </React.Fragment>
+                        ))}
                     </Box>
                 );
             }
             
-            // Si no hay referencia
+            // Referencia de ubicación (solo mostrarla si no hay movement_id ni ticket_id)
+            if (params.row.location_reference) {
+                references.push(
+                    <Typography variant="body2" key="location">
+                        {params.row.location_reference}
+                    </Typography>
+                );
+            }
+            
             return (
-                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                    <Typography variant="body2">-</Typography>
+                <Box>
+                    {references.map((ref, index) => (
+                        <React.Fragment key={index}>
+                            {index > 0 && <Box sx={{ my: 0.5 }} />}
+                            {ref}
+                        </React.Fragment>
+                    ))}
                 </Box>
             );
         }
@@ -511,6 +535,7 @@ const columns = [
                                     <MenuItem value="">Todas</MenuItem>
                                     <MenuItem value="ADD">Entrada</MenuItem>
                                     <MenuItem value="REMOVE">Salida</MenuItem>
+                                    <MenuItem value="TRANSFER">Traslado</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>
@@ -525,10 +550,11 @@ const columns = [
                                 >
                                     <MenuItem value="">Todos</MenuItem>
                                     <MenuItem value="COMPRA">Compra</MenuItem>
-                                    <MenuItem value="VENTA">Venta</MenuItem>
-                                    <MenuItem value="RETIRADA">Retirada</MenuItem>
-                                    <MenuItem value="USO">Uso</MenuItem>
                                     <MenuItem value="DEVOLUCION">Devolución</MenuItem>
+                                    <MenuItem value="RETIRADA">Retirada</MenuItem>
+                                    <MenuItem value="VENTA">Venta</MenuItem>
+                                    <MenuItem value="USO">Uso</MenuItem>
+                                    <MenuItem value="TRASLADO">Traslado</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>

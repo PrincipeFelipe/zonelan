@@ -137,6 +137,10 @@ class TicketItem(models.Model):
     )
     notes = models.CharField(max_length=255, blank=True, null=True)
     
+    # Añadir campo para la referencia a la ubicación
+    location_source = models.CharField(max_length=255, blank=True, null=True,
+                             verbose_name="Ubicación de origen", help_text="Ruta completa de la ubicación de origen")
+    
     @property
     def total_price(self):
         """Calcula el precio total con descuento"""

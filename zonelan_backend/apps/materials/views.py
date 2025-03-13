@@ -39,45 +39,89 @@ class MaterialViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+        operation = request.data.get('operation', None)
+        quantity_change = request.data.get('quantity_change', None)
+        reason = request.data.get('reason', 'COMPRA')
+        location_id = request.data.get('location_id', None)  # Añadir este campo
         
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        
-        # Obtener los datos adicionales para el registro de control
-        operation = request.data.get('operation')
-        quantity_change = int(request.data.get('quantity_change', 0))
-        reason = request.data.get('reason')
-        invoice_image = request.FILES.get('invoice_image')
-        
-        # Registrar el control solo si hay información de operación y no llamar a perform_update
-        if operation and quantity_change > 0:
-            # Crear registro de control
-            MaterialControl.objects.create(
-                user=request.user,
-                material=instance,
-                quantity=quantity_change,
-                operation=operation,
-                reason=reason,
-                invoice_image=invoice_image  # Añadir la imagen si existe
-            )
+        # Si hay una operación y un cambio de cantidad
+        if operation and quantity_change:
+            quantity_change = int(quantity_change)
             
-            # Actualizar el material directamente sin llamar a perform_update
+            # Operación para añadir al stock (no necesita ubicación)
             if operation == 'ADD':
                 instance.quantity += quantity_change
-            else:
+                
+                # Registrar control de material
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=instance,
+                    quantity=quantity_change,
+                    operation='ADD',
+                    reason=reason,
+                    invoice_image=request.FILES.get('invoice_image')
+                )
+                
+            # Operación para restar del stock (requiere ubicación para REMOVE)
+            elif operation == 'REMOVE':
+                # Validar que haya suficiente stock
+                if instance.quantity < quantity_change:
+                    return Response(
+                        {"detail": "No hay suficiente stock disponible."}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Si se especificó una ubicación, actualizar el stock en esa ubicación
+                if location_id and (reason == 'VENTA' or reason == 'RETIRADA'):
+                    try:
+                        from apps.storage.models import MaterialLocation
+                        location = MaterialLocation.objects.get(id=location_id)
+                        
+                        # Verificar que la ubicación corresponde al material
+                        if location.material.id != instance.id:
+                            return Response(
+                                {"detail": "La ubicación no corresponde al material seleccionado."}, 
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        
+                        # Verificar que haya suficiente stock en la ubicación
+                        if location.quantity < quantity_change:
+                            return Response(
+                                {"detail": f"No hay suficiente stock en la ubicación. Disponible: {location.quantity}"}, 
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        
+                        # Actualizar stock en ubicación
+                        location.quantity -= quantity_change
+                        location.save()
+                        
+                    except MaterialLocation.DoesNotExist:
+                        return Response(
+                            {"detail": "La ubicación especificada no existe."}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Actualizar stock total
                 instance.quantity -= quantity_change
                 
-            instance.name = request.data.get('name', instance.name)
-            instance.price = float(request.data.get('price', instance.price))
-            instance.save()
-            
-            return Response(serializer.data)
-        else:
-            # Si no hay operación, solo actualizamos los campos básicos
-            self.perform_update(serializer)
-            return Response(serializer.data)
+                # Registrar control de material
+                MaterialControl.objects.create(
+                    user=request.user,
+                    material=instance,
+                    quantity=quantity_change,
+                    operation='REMOVE',
+                    reason=reason
+                )
+        
+        # Actualizar campos básicos
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(serializer.data)
 
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
