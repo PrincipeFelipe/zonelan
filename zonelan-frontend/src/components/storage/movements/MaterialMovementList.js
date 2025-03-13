@@ -224,9 +224,11 @@ const MaterialMovementList = () => {
       renderCell: (params) => {
         const date = new Date(params.value);
         return (
-          <Typography variant="body2">
-            {format(date, 'dd/MM/yyyy HH:mm', { locale: es })}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+            <Typography variant="body2">
+              {format(date, 'dd/MM/yyyy HH:mm', { locale: es })}
+            </Typography>
+          </Box>
         );
       }
     },
@@ -235,7 +237,7 @@ const MaterialMovementList = () => {
       headerName: 'Operación',
       width: 150,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
           {getOperationIcon(params.value)}
           <Chip 
             label={params.row.operation_display} 
@@ -250,16 +252,25 @@ const MaterialMovementList = () => {
       field: 'material_name',
       headerName: 'Material',
       flex: 1,
-      minWidth: 200
+      minWidth: 200,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+          <Typography variant="body2">
+            {params.value}
+          </Typography>
+        </Box>
+      )
     },
     {
       field: 'quantity',
       headerName: 'Cantidad',
       width: 120,
       renderCell: (params) => (
-        <Typography variant="body2" fontWeight="medium">
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+          <Typography variant="body2" fontWeight="medium">
+            {params.value}
+          </Typography>
+        </Box>
       )
     },
     {
@@ -269,19 +280,29 @@ const MaterialMovementList = () => {
       minWidth: 200,
       renderCell: (params) => {
         if (params.row.operation === 'ADD') {
-          return <Typography variant="body2" color="text.secondary">-</Typography>;
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+              <Typography variant="body2" color="text.secondary">-</Typography>
+            </Box>
+          );
         }
         
         if (!params.row.source_location_display) {
-          return <Typography variant="body2" color="text.secondary">Sin origen</Typography>;
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+              <Typography variant="body2" color="text.secondary">Sin origen</Typography>
+            </Box>
+          );
         }
         
         return (
-          <Tooltip title={params.row.source_location_display || ''}>
-            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {params.row.source_location_display}
-            </Typography>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+            <Tooltip title={params.row.source_location_display || ''}>
+              <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {params.row.source_location_display}
+              </Typography>
+            </Tooltip>
+          </Box>
         );
       }
     },
@@ -292,19 +313,29 @@ const MaterialMovementList = () => {
       minWidth: 200,
       renderCell: (params) => {
         if (params.row.operation === 'REMOVE') {
-          return <Typography variant="body2" color="text.secondary">-</Typography>;
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+              <Typography variant="body2" color="text.secondary">-</Typography>
+            </Box>
+          );
         }
         
         if (!params.row.target_location_display) {
-          return <Typography variant="body2" color="text.secondary">Sin destino</Typography>;
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+              <Typography variant="body2" color="text.secondary">Sin destino</Typography>
+            </Box>
+          );
         }
         
         return (
-          <Tooltip title={params.row.target_location_display || ''}>
-            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {params.row.target_location_display}
-            </Typography>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+            <Tooltip title={params.row.target_location_display || ''}>
+              <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {params.row.target_location_display}
+              </Typography>
+            </Tooltip>
+          </Box>
         );
       }
     },
@@ -315,9 +346,11 @@ const MaterialMovementList = () => {
       renderCell: (params) => {
         const username = params.row.username || params.row.user_name || 'Desconocido';
         return (
-          <Typography variant="body2">
-            {username}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+            <Typography variant="body2">
+              {username}
+            </Typography>
+          </Box>
         );
       }
     },
@@ -327,7 +360,7 @@ const MaterialMovementList = () => {
       width: 100,
       sortable: false,
       renderCell: (params) => (
-        <Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
           <Tooltip title="Ver detalles">
             <IconButton
               size="small"
@@ -589,17 +622,29 @@ const MaterialMovementList = () => {
                     borderRight: 'none',
                   },
                   padding: '8px 16px',
+                  display: 'flex',            // Añadido para centrar contenido
+                  alignItems: 'center',       // Añadido para centrar contenido verticalmente
+                  '& .MuiBox-root': {         // Asegurar que los contenedores Box ocupen el ancho completo
+                    width: '100%'             // Permite que el contenido se alinee correctamente
+                  }
                 },
                 '& .MuiDataGrid-columnHeaders': {
                   borderBottom: '2px solid #E0E0E0',
                   fontSize: '0.875rem',
                   fontWeight: 'bold',
                 },
+                '& .MuiDataGrid-toolbarContainer': {
+                  borderBottom: '1px solid #E0E0E0',
+                  padding: '8px 16px',
+                },
                 '& .MuiDataGrid-footerContainer': {
                   borderTop: '2px solid #E0E0E0',
                 },
                 '& .MuiDataGrid-virtualScroller': {
                   backgroundColor: '#FFFFFF',
+                },
+                '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                  outline: 'none',            // Elimina el contorno al hacer foco
                 },
               }}
             />
@@ -678,7 +723,7 @@ const MaterialMovementList = () => {
                   Usuario
                 </Typography>
                 <Typography variant="body1">
-                  {selectedMovement.user_name}
+                  {selectedMovement.username || selectedMovement.user_username || 'Desconocido'}
                 </Typography>
               </Grid>
               

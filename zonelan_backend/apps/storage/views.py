@@ -131,52 +131,114 @@ class MaterialMovementViewSet(viewsets.ModelViewSet):
     
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        """
+        Crea un nuevo movimiento de material y actualiza las ubicaciones correspondientes
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Obtener datos validados
-        movement_data = serializer.validated_data
-        operation = movement_data.get('operation')
-        material = movement_data.get('material')
-        quantity = movement_data.get('quantity')
+        data = serializer.validated_data
+        material = data['material']
+        operation = data['operation']
+        quantity = data['quantity']
+        source_location = data.get('source_location')
+        target_location = data.get('target_location')
+        target_tray = data.get('target_tray')
+        notes = data.get('notes', '')
         
-        # Crear instancia y guardar para obtener el ID
-        instance = serializer.save(user=request.user)
-        
-        # Registrar en MaterialControl según el tipo de operación
-        from apps.materials.models import MaterialControl
-        
-        if operation == 'TRANSFER':
-            # Para traslados, registrar como TRANSFER
-            material_control = MaterialControl.objects.create(
-                user=request.user,
-                material=material,
-                quantity=quantity,
-                operation='TRANSFER',
-                reason='TRASLADO',
-                movement_id=instance.id,  # Establecer explícitamente el ID del movimiento
-                location_reference=f"Traslado desde {instance.source_location} hacia {instance.target_location or 'nueva ubicación'}"
-            )
-        else:
-            # Para entradas/salidas mantener comportamiento existente
+        try:
+            # 1. Validaciones previas según el tipo de operación
+            if operation in ['REMOVE', 'TRANSFER'] and not source_location:
+                return Response(
+                    {"detail": "Se requiere una ubicación de origen para esta operación"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if operation in ['ADD', 'TRANSFER'] and not (target_location or target_tray):
+                return Response(
+                    {"detail": "Se requiere una ubicación de destino para esta operación"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # 2. Verificar stock suficiente para REMOVE y TRANSFER
+            if operation in ['REMOVE', 'TRANSFER']:
+                if source_location.quantity < quantity:
+                    return Response(
+                        {"detail": f"Stock insuficiente en la ubicación de origen. Disponible: {source_location.quantity}"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # 3. Guardar el movimiento
+            movement = serializer.save(user=request.user)
+            
+            # 4. Registrar en el control de materiales
             material_control = MaterialControl.objects.create(
                 user=request.user,
                 material=material,
                 quantity=quantity,
                 operation=operation,
-                reason='RETIRADA' if operation == 'REMOVE' else 'COMPRA',
-                movement_id=instance.id,  # Establecer explícitamente el ID del movimiento
-                location_reference=f"{'Entrada a' if operation == 'ADD' else 'Salida de'} {instance.target_location if operation == 'ADD' else instance.source_location}"
+                reason='MOVIMIENTO',
+                notes=notes or f"Movimiento de material: {operation}"
             )
-        
-        # Asignar la relación también desde el otro lado
-        instance.material_control = material_control
-        instance.save()
-        
-        return Response(
-            self.get_serializer(instance).data,
-            status=status.HTTP_201_CREATED
-        )
+            
+            # 5. Asociar el control al movimiento
+            movement.material_control = material_control
+            movement.save()
+            
+            # 6. Actualizar las ubicaciones según el tipo de operación
+            if operation == 'ADD':
+                if target_location:
+                    # Si ya existe la ubicación, aumentar su stock
+                    target_location.quantity += quantity
+                    target_location.save()
+                elif target_tray:
+                    # Si es una nueva ubicación, crearla
+                    MaterialLocation.objects.create(
+                        material=material,
+                        tray=target_tray,
+                        quantity=quantity,
+                        minimum_quantity=0  # Valor predeterminado
+                    )
+                
+            elif operation == 'REMOVE':
+                # Restar stock de la ubicación de origen
+                source_location.quantity -= quantity
+                source_location.save()
+                
+            elif operation == 'TRANSFER':
+                # Restar del origen
+                source_location.quantity -= quantity
+                source_location.save()
+                
+                # Añadir al destino
+                if target_location:
+                    # Si ya existe la ubicación, aumentar su stock
+                    target_location.quantity += quantity
+                    target_location.save()
+                elif target_tray:
+                    # Si es una nueva ubicación, crearla
+                    MaterialLocation.objects.create(
+                        material=material,
+                        tray=target_tray,
+                        quantity=quantity,
+                        minimum_quantity=0  # Valor predeterminado
+                    )
+            
+            # 7. Actualizar el stock total en el objeto Material si es necesario
+            # Esto depende de cómo estés gestionando el stock general del material
+            # Si el material.quantity refleja el total en todas las ubicaciones, debes actualizarlo
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            # Rollback automático gracias al decorador @transaction.atomic
+            import traceback
+            print(f"Error al procesar el movimiento: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {"detail": f"Error al procesar el movimiento: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 @api_view(['GET'])
@@ -211,3 +273,75 @@ def material_locations(request, material_id):
         return Response(serializer.data)
     except Exception as e:
         return Response({"detail": str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def material_inventory_check(request, material_id):
+    """Endpoint para verificar el estado del inventario de un material"""
+    try:
+        # Obtener el material
+        material = Material.objects.get(id=material_id)
+        
+        # Obtener todas las ubicaciones de este material
+        locations = MaterialLocation.objects.filter(material=material)
+        
+        # Calcular el total ubicado
+        total_located = sum(location.quantity for location in locations)
+        
+        # Información detallada de cada ubicación
+        location_details = []
+        for location in locations:
+            tray = location.tray
+            shelf = tray.shelf
+            department = shelf.department
+            warehouse = department.warehouse
+            
+            location_details.append({
+                'id': location.id,
+                'quantity': location.quantity,
+                'minimum_quantity': location.minimum_quantity,
+                'tray_name': tray.name,
+                'shelf_name': shelf.name,
+                'department_name': department.name,
+                'warehouse_name': warehouse.name,
+                'full_path': f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+            })
+        
+        # Control de materiales reciente para este material
+        recent_controls = MaterialControl.objects.filter(
+            material=material
+        ).order_by('-date')[:10]  # Últimos 10 movimientos
+        
+        control_details = []
+        for control in recent_controls:
+            control_details.append({
+                'id': control.id,
+                'date': control.date,
+                'operation': control.operation,
+                'reason': control.reason,
+                'quantity': control.quantity,
+                'user': control.user.username,
+                'notes': control.notes
+            })
+        
+        # Construir la respuesta
+        response_data = {
+            'material': {
+                'id': material.id,
+                'name': material.name,
+                'quantity': material.quantity,
+            },
+            'inventory_summary': {
+                'total_located': total_located,
+                'unallocated': material.quantity - total_located,
+            },
+            'locations': location_details,
+            'recent_activity': control_details
+        }
+        
+        return Response(response_data)
+    except Material.DoesNotExist:
+        return Response({"detail": "Material no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -53,6 +53,10 @@ const MaterialControlList = () => {
     const [openTicketDialog, setOpenTicketDialog] = useState(false);
     const [selectedTicketId, setSelectedTicketId] = useState(null);
 
+    // Añadir estos estados después de las otras declaraciones de estado (alrededor de la línea 50)
+    const [openControlDetailDialog, setOpenControlDetailDialog] = useState(false);
+    const [selectedControl, setSelectedControl] = useState(null);
+
     useEffect(() => {
         fetchMaterialControls();
         fetchMaterials();
@@ -163,6 +167,8 @@ const MaterialControlList = () => {
             case 'RETIRADA': return 'secondary';
             case 'USO': return 'error';
             case 'DEVOLUCION': return 'success';
+            case 'TRASLADO': return 'info';
+            case 'CUADRE': return 'warning';  // Color amarillo para cuadres
             default: return 'default';
         }
     };
@@ -177,6 +183,7 @@ const MaterialControlList = () => {
             case 'USO': return 'Uso en reporte';
             case 'DEVOLUCION': return 'Devolución';
             case 'TRASLADO': return 'Traslado';  // Añadir esta línea
+            case 'CUADRE': return 'Cuadre de inventario';
             default: return reason;
         }
     };
@@ -243,6 +250,17 @@ const MaterialControlList = () => {
     const handleViewTicket = (ticketId) => {
         setSelectedTicketId(ticketId);
         setOpenTicketDialog(true);
+    };
+
+    // Añadir estas funciones después de handleViewTicket o en una ubicación adecuada
+    const handleViewControl = (control) => {
+        setSelectedControl(control);
+        setOpenControlDetailDialog(true);
+    };
+
+    const handleCloseControlDetailDialog = () => {
+        setOpenControlDetailDialog(false);
+        setSelectedControl(null);
     };
 
     // Modificar las columnas para aplicar alineación vertical consistente
@@ -369,6 +387,8 @@ const columns = [
                 case 'RETIRADA': color = '#9c27b0'; break;
                 case 'USO': color = '#d32f2f'; break;
                 case 'DEVOLUCION': color = '#2e7d32'; break;
+                case 'TRASLADO': color = '#0288d1'; break;
+                case 'CUADRE': color = '#ff8f00'; break;  // Color ámbar para cuadres
                 default: color = '#757575';
             }
             
@@ -406,8 +426,10 @@ const columns = [
         headerName: 'Referencia', 
         width: 200,
         renderCell: (params) => {
-            // Debug - quitar en producción
-            // debugInfo(params.row);
+            // Si es un cuadre de inventario, no mostrar ninguna referencia
+            if (params.row.reason === 'CUADRE') {
+                return null;
+            }
             
             // Construir referencias según el tipo de referencia disponible
             const references = [];
@@ -467,7 +489,7 @@ const columns = [
                         Movimiento #{params.row.movement_id}
                     </Link>
                 );
-                
+
                 // Retornar SOLO el enlace al movimiento, sin el texto de ubicación
                 return (
                     <Box>
@@ -496,7 +518,7 @@ const columns = [
             }
             
             // Referencia de ubicación (solo mostrarla si no hay movement_id ni ticket_id)
-            if (params.row.location_reference) {
+            if (params.row.location_reference && params.row.reason !== 'CUADRE') {
                 references.push(
                     <Typography variant="body2" key="location">
                         {params.row.location_reference}
@@ -515,6 +537,24 @@ const columns = [
                 </Box>
             );
         }
+    },
+    // Puedes añadir esta columna al final del array columns:
+    { 
+        field: 'actions', 
+        headerName: 'Acciones', 
+        width: 100,
+        renderCell: (params) => (
+            <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                <IconButton
+                    onClick={() => handleViewControl(params.row)}
+                    size="small"
+                    color="primary"
+                    title="Ver detalles"
+                >
+                    <Visibility fontSize="small" />
+                </IconButton>
+            </Box>
+        )
     },
 ];
 
@@ -634,6 +674,7 @@ const columns = [
                                     <MenuItem value="VENTA">Venta</MenuItem>
                                     <MenuItem value="USO">Uso</MenuItem>
                                     <MenuItem value="TRASLADO">Traslado</MenuItem>
+                                    <MenuItem value="CUADRE">Cuadre de inventario</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>
@@ -911,7 +952,7 @@ const columns = [
                                     Usuario
                                 </Typography>
                                 <Typography variant="body1">
-                                    {selectedMovement.user_name}
+                                    {selectedMovement.username}
                                 </Typography>
                             </Grid>
                             
@@ -945,6 +986,170 @@ const columns = [
                 onClose={() => setOpenTicketDialog(false)}
                 ticketId={selectedTicketId}
             />
+
+            {/* En el modal de detalle del control, añadir un campo para mostrar las notas */}
+            <Dialog open={openControlDetailDialog} onClose={handleCloseControlDetailDialog} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography>Detalles del Control de Material</Typography>
+                        <IconButton onClick={handleCloseControlDetailDialog}>
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent dividers>
+                    {selectedControl ? (
+                        <Grid container spacing={3}>
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Fecha y Hora
+                                </Typography>
+                                <Typography variant="body1">
+                                    {formatDate(selectedControl.date)}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Material
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedControl.material_name}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Operación
+                                </Typography>
+                                <Chip 
+                                    label={selectedControl.operation === 'ADD' ? 'Entrada' : 
+                                           selectedControl.operation === 'REMOVE' ? 'Salida' : 'Traslado'} 
+                                    color={getOperationColor(selectedControl.operation)}
+                                    variant="outlined"
+                                />
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Motivo
+                                </Typography>
+                                <Chip 
+                                    label={getReasonLabel(selectedControl.reason, selectedControl.ticket)} 
+                                    color={getReasonColor(selectedControl.reason)}
+                                    variant="outlined"
+                                />
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Cantidad
+                                </Typography>
+                                <Typography variant="body1" fontWeight="medium">
+                                    {selectedControl.quantity}
+                                </Typography>
+                            </Grid>
+                            
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                    Usuario
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedControl.username}
+                                </Typography>
+                            </Grid>
+                            
+                            {selectedControl.notes && (
+                                <Grid item xs={12}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Notas
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {selectedControl.notes}
+                                    </Typography>
+                                </Grid>
+                            )}
+                            
+                            {selectedControl.report_id && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Reporte asociado
+                                    </Typography>
+                                    <Link 
+                                        component="button"
+                                        onClick={() => {
+                                            handleCloseControlDetailDialog();
+                                            handleViewReport(selectedControl.report_id);
+                                        }}
+                                        color="primary"
+                                    >
+                                        Ver Reporte #{selectedControl.report_id}
+                                    </Link>
+                                </Grid>
+                            )}
+                            
+                            {selectedControl.ticket_id && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Ticket asociado
+                                    </Typography>
+                                    <Link 
+                                        component="button"
+                                        onClick={() => {
+                                            handleCloseControlDetailDialog();
+                                            handleViewTicket(selectedControl.ticket_id);
+                                        }}
+                                        color="primary"
+                                    >
+                                        Ver Ticket #{selectedControl.ticket_id}
+                                    </Link>
+                                </Grid>
+                            )}
+                            
+                            {selectedControl.movement_id && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Movimiento asociado
+                                    </Typography>
+                                    <Link 
+                                        component="button"
+                                        onClick={() => {
+                                            handleCloseControlDetailDialog();
+                                            handleViewMovement(selectedControl.movement_id);
+                                        }}
+                                        color="primary"
+                                    >
+                                        Ver Movimiento #{selectedControl.movement_id}
+                                    </Link>
+                                </Grid>
+                            )}
+                            
+                            {selectedControl.invoice_image && (
+                                <Grid item xs={12}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Albarán de compra
+                                    </Typography>
+                                    <Button 
+                                        variant="outlined"
+                                        startIcon={<Visibility />}
+                                        onClick={() => {
+                                            handleCloseControlDetailDialog();
+                                            handleViewInvoice(selectedControl.invoice_image);
+                                        }}
+                                    >
+                                        Ver albarán
+                                    </Button>
+                                </Grid>
+                            )}
+                        </Grid>
+                    ) : (
+                        <Typography>No se pudo cargar la información del control</Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseControlDetailDialog}>Cerrar</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

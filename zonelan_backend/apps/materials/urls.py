@@ -11,3 +11,6 @@ urlpatterns = [
     path('material-history/<int:material_id>/', views.material_history, name='material-history'),
     path('stats/', views.material_stats, name='material-stats'),
 ]
+
+# La acción adjust_stock estará disponible en:
+# /materials/materials/{id}/adjust_stock/

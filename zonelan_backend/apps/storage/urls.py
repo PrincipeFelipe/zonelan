@@ -7,7 +7,8 @@ from .views import (
     TrayViewSet, 
     MaterialLocationViewSet, 
     MaterialMovementViewSet,
-    material_locations  # Asegúrate de importar esta función
+    material_locations,  # Ya importada
+    material_inventory_check  # Añade esta importación
 )
 
 router = DefaultRouter()
@@ -21,5 +22,6 @@ router.register(r'movements', MaterialMovementViewSet, basename='movements')
 urlpatterns = [
     path('', include(router.urls)),
     path('materials/<int:material_id>/locations/', material_locations, name='material-locations'),
+    path('materials/<int:material_id>/inventory_check/', material_inventory_check, name='material-inventory-check'),
     # Otras rutas existentes...
 ]

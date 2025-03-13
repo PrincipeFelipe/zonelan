@@ -43,28 +43,24 @@ class MaterialControl(models.Model):
     
     REASON_CHOICES = [
         ('COMPRA', 'Compra'),
-        ('DEVOLUCION', 'Devolución'),
-        ('RETIRADA', 'Retirada'),
         ('VENTA', 'Venta'),
-        ('USO', 'Uso'),
-        ('TRASLADO', 'Traslado'),  # Añadir esta opción para razones
+        ('RETIRADA', 'Retirada'),
+        ('USO', 'Uso en reporte'),
+        ('DEVOLUCION', 'Devolución'),
+        ('TRASLADO', 'Traslado'),
+        ('CUADRE', 'Cuadre de inventario'),  # Añadimos esta opción
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Usuario')
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, verbose_name='Usuario')
     material = models.ForeignKey(Material, on_delete=models.CASCADE, verbose_name='Material')
+    date = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
     quantity = models.IntegerField(verbose_name='Cantidad')
-    operation = models.CharField(
-        max_length=10, 
-        choices=OPERATION_CHOICES, 
-        default='ADD',
-        verbose_name='Operación'
-    )
-    reason = models.CharField(
-        max_length=20,
-        choices=REASON_CHOICES,
-        default='COMPRA',
-        verbose_name='Motivo'
-    )
+    operation = models.CharField(max_length=10, choices=OPERATION_CHOICES, verbose_name='Operación')
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, verbose_name='Motivo')
+    
+    # Añadir el campo notes aquí
+    notes = models.TextField(blank=True, null=True, verbose_name='Notas')
+    
     report = models.ForeignKey(
         'reports.WorkReport',
         on_delete=models.SET_NULL,
@@ -88,7 +84,6 @@ class MaterialControl(models.Model):
         blank=True,
         verbose_name='Imagen de albarán'
     )
-    date = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
     
     # Añadir campo para referencia de ubicación
     location_reference = models.CharField(
@@ -118,6 +113,7 @@ class MaterialControl(models.Model):
     class Meta:
         verbose_name = 'Control de Material'
         verbose_name_plural = 'Control de Materiales'
+        ordering = ['-date']
 
     def __str__(self):
         if self.operation == 'ADD':
