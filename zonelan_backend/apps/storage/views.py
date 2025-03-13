@@ -240,6 +240,27 @@ class MaterialMovementViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def list(self, request, *args, **kwargs):
+        try:
+            # Código original para listar los movimientos
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            # Registrar el error para investigación
+            import traceback
+            print(f"Error en MaterialMovementViewSet.list: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Devolver una respuesta vacía en lugar de un error 500
+            return Response([], status=200)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

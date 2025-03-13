@@ -140,30 +140,45 @@ class MaterialMovementSerializer(serializers.ModelSerializer):
     
     # Método para obtener el display del destino
     def get_target_location_display(self, obj):
+        """
+        Muestra la información completa de la ubicación de destino.
+        """
         if obj.target_location:
-            tray = obj.target_location.tray
-            shelf = tray.shelf
-            department = shelf.department
-            warehouse = department.warehouse
-            
-            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
-        elif obj.target_tray:
-            tray = obj.target_tray
-            shelf = tray.shelf
-            department = shelf.department
-            warehouse = department.warehouse
-            
-            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
-        
+            return self._get_full_location_path(obj.target_location)
+        elif hasattr(obj, 'target_tray') and obj.target_tray:
+            try:
+                tray = Tray.objects.get(id=obj.target_tray)
+                return f"{tray.shelf.department.warehouse.name} > {tray.shelf.department.name} > {tray.shelf.name} > {tray.name}"
+            except Tray.DoesNotExist:
+                return "Ubicación no encontrada"
         return None
     
     # Método para obtener el almacén de destino
     def get_target_location_warehouse(self, obj):
+        """
+        Obtiene el ID del almacén donde se encuentra la ubicación de destino.
+        """
         if obj.target_location:
-            return obj.target_location.tray.shelf.department.warehouse.id
-        elif obj.target_tray:
-            return obj.target_tray.shelf.department.warehouse.id
+            try:
+                return obj.target_location.tray.shelf.department.warehouse.id
+            except AttributeError:
+                return None
         return None
+    
+    # Agregar este método que falta
+    def _get_full_location_path(self, location):
+        """
+        Devuelve la ruta completa de una ubicación en formato legible.
+        """
+        try:
+            tray = location.tray
+            shelf = tray.shelf
+            department = shelf.department
+            warehouse = department.warehouse
+            
+            return f"{warehouse.name} > {department.name} > {shelf.name} > {tray.name}"
+        except Exception:
+            return "Ubicación no disponible"
 
 
 class NestedDepartmentSerializer(serializers.ModelSerializer):

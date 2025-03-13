@@ -38,8 +38,8 @@ const StorageDashboard = () => {
         try {
             setLoading(true);
             
-            // Realizar todas las peticiones en paralelo
-            const [warehousesRes, departmentsRes, shelvesRes, traysRes, locationsRes, lowStockRes, movementsRes] = await Promise.all([
+            // Usar Promise.allSettled en lugar de Promise.all para manejar fallos individuales
+            const results = await Promise.allSettled([
                 axios.get('/storage/warehouses/'),
                 axios.get('/storage/departments/'),
                 axios.get('/storage/shelves/'),
@@ -49,14 +49,25 @@ const StorageDashboard = () => {
                 axios.get('/storage/movements/')
             ]);
             
+            // Función para extraer datos de forma segura
+            const extractData = (result, index) => {
+                if (result.status === 'fulfilled') {
+                    const data = result.value.data;
+                    return Array.isArray(data) ? data.length : (data.count || 0);
+                } else {
+                    console.error(`Error en la petición ${index}:`, result.reason);
+                    return 0;
+                }
+            };
+            
             setStats({
-                warehouses: warehousesRes.data.length || warehousesRes.data.count || 0,
-                departments: departmentsRes.data.length || departmentsRes.data.count || 0,
-                shelves: shelvesRes.data.length || shelvesRes.data.count || 0,
-                trays: traysRes.data.length || traysRes.data.count || 0,
-                locations: locationsRes.data.length || locationsRes.data.count || 0,
-                lowStock: lowStockRes.data.length || lowStockRes.data.count || 0,
-                movements: movementsRes.data.length || movementsRes.data.count || 0
+                warehouses: extractData(results[0], 'warehouses'),
+                departments: extractData(results[1], 'departments'),
+                shelves: extractData(results[2], 'shelves'),
+                trays: extractData(results[3], 'trays'),
+                locations: extractData(results[4], 'locations'),
+                lowStock: extractData(results[5], 'lowStock'),
+                movements: extractData(results[6], 'movements')
             });
         } catch (error) {
             console.error('Error fetching storage stats:', error);
