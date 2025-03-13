@@ -171,14 +171,16 @@ class MaterialMovementViewSet(viewsets.ModelViewSet):
             # 3. Guardar el movimiento
             movement = serializer.save(user=request.user)
             
-            # 4. Registrar en el control de materiales
+            # 4. Registrar en el control de materiales con motivo "TRASLADO" en lugar de "MOVIMIENTO"
             material_control = MaterialControl.objects.create(
                 user=request.user,
                 material=material,
                 quantity=quantity,
                 operation=operation,
-                reason='MOVIMIENTO',
-                notes=notes or f"Movimiento de material: {operation}"
+                reason='TRASLADO',  # Cambiado de 'MOVIMIENTO' a 'TRASLADO'
+                notes=notes or f"Traslado de material: {operation}",  # También actualizado el texto aquí
+                location_reference=source_location.id if source_location else (target_location.id if target_location else None),
+                movement_id=movement.id
             )
             
             # 5. Asociar el control al movimiento
