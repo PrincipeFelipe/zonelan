@@ -1079,16 +1079,37 @@ const columns = [
                                     <Typography variant="subtitle1" gutterBottom fontWeight="bold">
                                         Reporte asociado
                                     </Typography>
-                                    <Link 
-                                        component="button"
-                                        onClick={() => {
-                                            handleCloseControlDetailDialog();
-                                            handleViewReport(selectedControl.report_id);
-                                        }}
-                                        color="primary"
-                                    >
-                                        Ver Reporte #{selectedControl.report_id}
-                                    </Link>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Link 
+                                            component="button"
+                                            onClick={() => {
+                                                handleCloseControlDetailDialog();
+                                                handleViewReport(selectedControl.report_id);
+                                            }}
+                                            color={selectedControl.report_deleted ? "error" : "primary"}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            {selectedControl.report_deleted && <Delete fontSize="small" sx={{ mr: 0.5, color: 'error.main' }} />}
+                                            Ver Reporte #{selectedControl.report_id}
+                                        </Link>
+                                        {selectedControl.report_deleted && (
+                                            <Chip 
+                                                label="Eliminado" 
+                                                color="error"
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ ml: 1 }}
+                                            />
+                                        )}
+                                    </Box>
+                                    {selectedControl.report_deleted && selectedControl.report_deleted_at && (
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                            Eliminado el {format(new Date(selectedControl.report_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                        </Typography>
+                                    )}
                                 </Grid>
                             )}
                             
@@ -1178,6 +1199,21 @@ const columns = [
                                     Este control de material está asociado a un ticket que ha sido eliminado
                                     {selectedControl.ticket_deleted_at && (
                                         <> el {format(new Date(selectedControl.ticket_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}</>
+                                    )}.
+                                </Alert>
+                            )}
+
+                            {/* Añadir alerta para reportes eliminados */}
+                            {selectedControl && selectedControl.report_deleted && (
+                                <Alert 
+                                    severity="warning" 
+                                    sx={{ mb: 2 }}
+                                    icon={<Delete color="error" />}
+                                >
+                                    <AlertTitle>Reporte eliminado</AlertTitle>
+                                    Este control de material está asociado a un reporte que ha sido eliminado
+                                    {selectedControl.report_deleted_at && (
+                                        <> el {format(new Date(selectedControl.report_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}</>
                                     )}.
                                 </Alert>
                             )}

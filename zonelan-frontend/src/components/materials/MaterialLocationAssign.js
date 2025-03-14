@@ -156,9 +156,20 @@ const MaterialLocationAssign = ({ open, onClose, material }) => {
             // Si no hay stock disponible, establecer cantidad predeterminada a 0
             if (stockAvailable <= 0) {
                 setQuantity(0);
-                // Opcionalmente, mostrar un mensaje
+                // Modificar esta línea - cambiar toast.warning por toast
                 if (material.quantity > 0) {
-                    toast.warning('Todo el stock de este material ya está asignado a ubicaciones');
+                    // Opción 1: Usar toast con estilo personalizado
+                    toast("Todo el stock de este material ya está asignado a ubicaciones", {
+                        icon: '⚠️',  // Emoji de advertencia
+                        style: {
+                            borderRadius: '10px',
+                            background: '#FFF3CD',
+                            color: '#856404',
+                        },
+                    });
+                    
+                    // Alternativa - Opción 2: Usar toast.error en lugar de warning
+                    // toast.error("Todo el stock de este material ya está asignado a ubicaciones");
                 } else {
                     toast.error('Este material no tiene stock disponible');
                 }

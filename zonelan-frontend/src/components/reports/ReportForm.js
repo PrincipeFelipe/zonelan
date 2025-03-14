@@ -67,6 +67,8 @@ const ReportForm = () => {
     const [openLocationSelector, setOpenLocationSelector] = useState(false);
     const [pendingMaterial, setPendingMaterial] = useState(null);
 
+    const isReportDeleted = Boolean(report?.is_deleted || originalReport?.is_deleted);
+
     useEffect(() => {
         fetchIncidents();
         fetchTechnicians();
@@ -86,30 +88,36 @@ const ReportForm = () => {
 
     const fetchReport = async () => {
         try {
-            const response = await axios.get(`/reports/reports/${id}/`);
-            console.log('Datos recibidos:', response.data);
-
+            console.log('Obteniendo reporte:', id, 'con include_deleted=true');
+            
+            const response = await axios.get(`/reports/reports/${id}/`, {
+                params: { include_deleted: true },
+                timeout: 10000  // 10 segundos de timeout
+            });
+            
+            console.log('Respuesta del servidor:', response.data);
+            
             if (response.data) {
+                // Asegurar correcta interpretación de is_deleted
+                const isDeleted = response.data.is_deleted === true || 
+                                  response.data.is_deleted === "true" || 
+                                  response.data.is_deleted === 1 || 
+                                  response.data.is_deleted === "1";
+                
+                // IMPORTANTE: Asegúrate de que todos los arrays existen
                 setReport({
                     date: response.data.date || new Date().toISOString().split('T')[0],
                     incident: response.data.incident || '',
                     description: response.data.description || '',
                     hours_worked: response.data.hours_worked || '',
                     status: response.data.status || 'DRAFT',
-                    technicians: Array.isArray(response.data.technicians) 
-                        ? response.data.technicians.map(tech => ({
-                            technician: tech.technician
-                        }))
-                        : [],
-                    materials_used: Array.isArray(response.data.materials_used)
-                        ? response.data.materials_used.map(material => ({
-                            material: material.material,
-                            quantity: parseInt(material.quantity)
-                        }))
-                        : []
+                    is_deleted: isDeleted,
+                    // IMPORTANTE: Asegúrate de que estos sean arrays incluso si son undefined en response.data
+                    technicians: Array.isArray(response.data.technicians) ? response.data.technicians : [],
+                    materials_used: Array.isArray(response.data.materials_used) ? response.data.materials_used : []
                 });
-
-                // Actualizar las imágenes según la estructura del backend
+                
+                // Actualizar las imágenes - asegúrate de que siempre son arrays
                 setBeforeImages(Array.isArray(response.data.before_images) 
                     ? response.data.before_images 
                     : []
@@ -118,13 +126,26 @@ const ReportForm = () => {
                     ? response.data.after_images 
                     : []
                 );
-
+                
                 // Guardar el reporte original para comparar cambios
                 setOriginalReport(response.data);
             }
         } catch (error) {
             console.error('Error fetching report:', error);
-            toast.error('Error al cargar el parte');
+            
+            const statusCode = error.response?.status;
+            const errorDetail = error.response?.data?.detail;
+            
+            console.error(`Status: ${statusCode}, Detalle: ${errorDetail}`);
+            
+            if (statusCode === 404) {
+                toast.error('El reporte solicitado no existe o ha sido eliminado permanentemente');
+            } else {
+                toast.error('Error al cargar el parte');
+            }
+            
+            // Opcional: navegar de vuelta al listado después de mostrar el error
+            setTimeout(() => navigate('/dashboard/reports'), 2000);
         }
     };
 
@@ -592,12 +613,46 @@ const ReportForm = () => {
 
     return (
         <Box sx={{ p: 2 }}>
+            {isReportDeleted && (
+                <Paper 
+                    sx={{ 
+                        p: 1.5, 
+                        mb: 3, 
+                        backgroundColor: '#ffebee', 
+                        borderLeft: '5px solid #d32f2f',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Delete color="error" sx={{ mr: 1 }} />
+                        <Typography variant="h6" color="error">
+                            REPORTE ELIMINADO - No se puede editar
+                            {originalReport?.deleted_at && (
+                                <Typography component="span" variant="body2" sx={{ ml: 1 }}>
+                                    el {new Date(originalReport.deleted_at).toLocaleString('es-ES')}
+                                </Typography>
+                            )}
+                        </Typography>
+                    </Box>
+                    <Button 
+                        variant="outlined" 
+                        color="error"
+                        size="small" 
+                        onClick={() => navigate('/dashboard/reports')}
+                    >
+                        Volver a la lista
+                    </Button>
+                </Paper>
+            )}
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h6">
-                {editMode 
-                    ? `Editar Parte #${id}` 
-                    : 'Nuevo Parte'}
-            </Typography>
+                <Typography variant="h6">
+                    {editMode 
+                        ? `Editar Parte #${id}` 
+                        : 'Nuevo Parte'}
+                </Typography>
                 <Box>
                     <Button
                         sx={{ mr: 1 }}
@@ -610,6 +665,7 @@ const ReportForm = () => {
                         variant="contained"
                         startIcon={<Save />}
                         onClick={handleSubmit}
+                        disabled={isReportDeleted} // Deshabilitar si está eliminado
                     >
                         Guardar
                     </Button>

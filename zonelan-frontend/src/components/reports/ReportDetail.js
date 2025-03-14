@@ -13,9 +13,10 @@ import {
     ImageListItem,
     Dialog,
     DialogContent,
-    IconButton as MuiIconButton
+    IconButton as MuiIconButton,
+    Chip
 } from '@mui/material';
-import { Edit, ArrowBack, Close, NavigateNext, NavigateBefore, Print } from '@mui/icons-material';
+import { Delete, Edit, ArrowBack, Close, NavigateNext, NavigateBefore, Print } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
 import { toast, Toaster } from 'react-hot-toast';
@@ -34,9 +35,17 @@ const ReportDetail = () => {
 
     const fetchReport = async () => {
         try {
-            const response = await axios.get(`/reports/reports/${id}/`);
+            const response = await axios.get(`/reports/reports/${id}/`, {
+                params: { include_deleted: true }
+            });
+            
             if (response.data) {
-                setReport(response.data);
+                // Asegurar que is_deleted se interprete correctamente
+                const reportData = {
+                    ...response.data,
+                    is_deleted: Boolean(response.data.is_deleted)
+                };
+                setReport(reportData);
             } else {
                 navigate('/dashboard/reports');
                 toast.error('Parte no encontrado');
@@ -163,6 +172,8 @@ const ReportDetail = () => {
         }
     };
 
+    const isReportDeleted = Boolean(report?.is_deleted);
+
     if (!report) return (
         <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography>Cargando parte de trabajo...</Typography>
@@ -172,32 +183,92 @@ const ReportDetail = () => {
     return (
         <Box sx={{ p: 2 }}>
             <Toaster position="top-right" />
+            
+            {/* Banner para reportes eliminados */}
+            {isReportDeleted && (
+                <Paper 
+                    sx={{ 
+                        p: 1.5, 
+                        mb: 3, 
+                        backgroundColor: '#ffebee', 
+                        borderLeft: '5px solid #d32f2f',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Delete color="error" sx={{ mr: 1 }} />
+                        <Typography variant="h6" color="error">
+                            REPORTE ELIMINADO
+                            {report.deleted_at && (
+                                <Typography component="span" variant="body2" sx={{ ml: 1 }}>
+                                    el {new Date(report.deleted_at).toLocaleDateString('es-ES', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </Typography>
+                            )}
+                        </Typography>
+                    </Box>
+                    <Button 
+                        variant="outlined" 
+                        color="error"
+                        size="small" 
+                        onClick={() => navigate('/dashboard/reports')}
+                    >
+                        Volver a la lista
+                    </Button>
+                </Paper>
+            )}
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Button
+                        variant="outlined"
                         startIcon={<ArrowBack />}
                         onClick={() => navigate('/dashboard/reports')}
                     >
                         Volver
                     </Button>
                     <Typography variant="h6">
-                        Parte de trabajo #{report.id}
+                        Parte #{report.id}
                     </Typography>
+                    <Chip 
+                        label={report.status === 'DRAFT' ? 'Borrador' : 'Completado'} 
+                        color={report.status === 'DRAFT' ? 'warning' : 'success'}
+                        size="small"
+                    />
+                    {isReportDeleted && (
+                        <Chip 
+                            label="Eliminado" 
+                            color="error"
+                            size="small"
+                            sx={{ ml: 1 }}
+                        />
+                    )}
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                
+                <Box>
+                    {!isReportDeleted && (
+                        <Button
+                            variant="outlined"
+                            startIcon={<Edit />}
+                            onClick={() => navigate(`/dashboard/reports/edit/${report.id}`)}
+                            sx={{ mr: 1 }}
+                        >
+                            Editar
+                        </Button>
+                    )}
                     <Button
                         variant="outlined"
                         startIcon={<Print />}
                         onClick={handlePrint}
                     >
                         Imprimir
-                    </Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<Edit />}
-                        onClick={() => navigate(`/dashboard/reports/${id}/edit`)}
-                    >
-                        Editar
                     </Button>
                 </Box>
             </Box>

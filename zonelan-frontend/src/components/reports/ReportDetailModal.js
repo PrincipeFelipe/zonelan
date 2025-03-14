@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton,
     Typography, Box, Grid, Chip, Divider, List, ListItem, ListItemText,
-    ImageList, ImageListItem, CircularProgress, Tab, Tabs
+    ImageList, ImageListItem, CircularProgress, Tab, Tabs, Alert, AlertTitle
 } from '@mui/material';
-import { Close, Person, Assignment, DateRange } from '@mui/icons-material';
+import { Close, Person, Assignment, DateRange, Delete } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import axios from '../../utils/axiosConfig';
@@ -28,8 +28,23 @@ const ReportDetailModal = ({ open, onClose, reportId }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get(`/reports/reports/${id}/`);
-            setReport(response.data);
+            const response = await axios.get(`/reports/reports/${id}/`, {
+                params: { include_deleted: true }
+            });
+            
+            if (response.data) {
+                // Asegurar que is_deleted se interprete correctamente
+                const isDeleted = response.data.is_deleted === true || 
+                               response.data.is_deleted === "true" || 
+                               response.data.is_deleted === 1 || 
+                               response.data.is_deleted === "1";
+                            
+                const reportData = {
+                    ...response.data,
+                    is_deleted: isDeleted
+                };
+                setReport(reportData);
+            }
         } catch (err) {
             console.error('Error al cargar los detalles del reporte:', err);
             setError('No se pudieron cargar los detalles del reporte');
@@ -77,7 +92,29 @@ const ReportDetailModal = ({ open, onClose, reportId }) => {
             <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
                 <DialogTitle>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="h6">Detalles del Parte de Trabajo</Typography>
+                        <Box display="flex" alignItems="center">
+                            <Assignment fontSize="small" sx={{ mr: 1 }} />
+                            <Typography variant="h6">
+                                Parte #{report?.id}
+                            </Typography>
+                            {report && (
+                                <Chip 
+                                    label={getStatusLabel(report.status)} 
+                                    color={getStatusColor(report.status)} 
+                                    size="small" 
+                                    sx={{ ml: 1 }} 
+                                />
+                            )}
+                            {report?.is_deleted && (
+                                <Chip 
+                                    label="Eliminado" 
+                                    color="error" 
+                                    size="small" 
+                                    sx={{ ml: 1 }}
+                                    icon={<Delete fontSize="small" />}
+                                />
+                            )}
+                        </Box>
                         <IconButton onClick={onClose}>
                             <Close />
                         </IconButton>
@@ -93,6 +130,21 @@ const ReportDetailModal = ({ open, onClose, reportId }) => {
                         <Typography color="error">{error}</Typography>
                     ) : report ? (
                         <>
+                            {/* Mostrar alerta cuando el reporte está eliminado */}
+                            {report.is_deleted && (
+                                <Alert 
+                                    severity="warning" 
+                                    sx={{ mb: 2 }}
+                                    icon={<Delete color="error" />}
+                                >
+                                    <AlertTitle>Reporte eliminado</AlertTitle>
+                                    Este parte de trabajo ha sido eliminado
+                                    {report.deleted_at && (
+                                        <> el {formatDate(report.deleted_at)}</>
+                                    )}.
+                                </Alert>
+                            )}
+                            
                             <Grid container spacing={3} mb={2}>
                                 <Grid item xs={12} sm={6}>
                                     <Box display="flex" alignItems="center" mb={1}>

@@ -155,7 +155,7 @@ const TicketList = () => {
             });
 
             if (isConfirmed) {
-                await axios.post(`/tickets/tickets/${ticket.id}/pay/`, {
+                await axios.post(`/tickets/tickets/${ticket.id}/mark_as_paid/`, {
                     payment_method: value.paymentMethod
                 });
                 

@@ -35,6 +35,7 @@ export const useTickets = () => {
         try {
             setLoading(true);
             toast.loading('Marcando ticket como pagado...', { id: 'mark-paid' });
+            // Corregir la URL aquí también
             const response = await axios.post(`/tickets/tickets/${id}/mark_as_paid/`, {
                 payment_method: paymentMethod
             });

@@ -34,6 +34,7 @@ class WorkReport(models.Model):
         verbose_name='Estado'
     )
     is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de eliminación')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -6,7 +6,10 @@ import {
     Box,
     IconButton,
     Tooltip,
-    Chip  // Añadir esta importación
+    Chip,  // Añadir esta importación
+    Switch,
+    FormControlLabel,
+    FormControl
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { Delete, Visibility, Add, Print } from '@mui/icons-material';
@@ -14,26 +17,69 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axiosConfig';
 import Swal from 'sweetalert2';
 import { Toaster, toast } from 'react-hot-toast';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const ReportList = () => {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [showDeleted, setShowDeleted] = useState(false);
+    const [isSuperuser, setIsSuperuser] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
+        // Verificar permisos de superusuario
+        const user = JSON.parse(localStorage.getItem('user'));
+        setIsSuperuser(user?.type === 'SuperAdmin' || user?.type === 'Admin');
+        
         fetchReports();
     }, []);
+
+    // Modificar para cargar reportes según showDeleted
+    useEffect(() => {
+        fetchReports();
+    }, [showDeleted]);
 
     const fetchReports = async () => {
         setLoading(true);
         try {
-            // El backend ya filtra los reportes eliminados
-            const response = await axios.get('/reports/reports/');
-            setReports(Array.isArray(response.data) ? response.data : []);
+            let url = '/reports/reports/';
+            if (showDeleted) {
+                url = '/reports/reports/deleted/';
+            }
+            
+            // Añadir un timeout para evitar que la solicitud se quede colgada
+            const response = await axios.get(url, { 
+                timeout: 10000,  // 10 segundos
+                validateStatus: function (status) {
+                    return status < 500; // Resolver solo si el status es menor a 500
+                }
+            });
+            
+            // Si la respuesta es exitosa y contiene datos
+            if (response.status === 200 && Array.isArray(response.data)) {
+                setReports(response.data);
+            } else {
+                console.warn('Respuesta inesperada al cargar reportes:', response);
+                // Si hay un error, mostrar mensaje y desactivar el modo "showDeleted"
+                if (showDeleted) {
+                    toast.error('Error al cargar reportes eliminados. Se mostrarán reportes activos.');
+                    setShowDeleted(false);
+                } else {
+                    toast.error('Error al cargar los partes de trabajo');
+                    setReports([]);
+                }
+            }
         } catch (error) {
             console.error('Error fetching reports:', error);
-            toast.error('Error al cargar los partes de trabajo');
+            toast.error('Error al cargar los partes de trabajo. Intente de nuevo más tarde.');
             setReports([]);
+            
+            // Si hay un error mientras se muestran eliminados, volver al modo normal
+            if (showDeleted) {
+                toast.error('No se pueden mostrar reportes eliminados. Volviendo a reportes activos.');
+                setShowDeleted(false);
+            }
         } finally {
             setLoading(false);
         }
@@ -367,9 +413,16 @@ const ReportList = () => {
             width: 120,
             renderCell: (params) => {
                 const status = params.row?.status;
-                let label, color, borderColor;
+                const isDeleted = Boolean(params.row?.is_deleted);
                 
-                if (status === 'DRAFT') {
+                let label, color, borderColor, variant = "outlined";
+                
+                if (isDeleted) {
+                    label = 'Eliminado';
+                    color = '#d32f2f';
+                    borderColor = '#d32f2f';
+                    variant = "filled";
+                } else if (status === 'DRAFT') {
                     label = 'Borrador';
                     color = '#ed6c02';
                     borderColor = '#ed6c02';
@@ -377,10 +430,6 @@ const ReportList = () => {
                     label = 'Completado';
                     color = '#2e7d32';
                     borderColor = '#2e7d32';
-                } else if (status === 'DELETED') {
-                    label = 'Eliminado';
-                    color = '#d32f2f';
-                    borderColor = '#d32f2f';
                 } else {
                     label = status || '';
                     color = '#757575';
@@ -393,13 +442,17 @@ const ReportList = () => {
                             size="small"
                             label={label}
                             sx={{
-                                color: color,
+                                color: isDeleted ? '#fff' : color,
                                 border: `1px solid ${borderColor}`,
-                                backgroundColor: 'transparent',
+                                backgroundColor: isDeleted ? 'rgba(211, 47, 47, 0.8)' : 'transparent',
                                 fontWeight: 500,
                                 fontSize: '0.75rem'
                             }}
-                            variant="outlined"
+                            variant={variant}
+                            title={params.row.deleted_at && isDeleted ? 
+                                `Eliminado el ${format(new Date(params.row.deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}` : 
+                                undefined
+                            }
                         />
                     </Box>
                 );
@@ -466,15 +519,17 @@ const ReportList = () => {
                             <Print fontSize="small" />
                         </IconButton>
                     </Tooltip>
-                    <Tooltip title="Eliminar">
-                        <IconButton 
-                            onClick={() => handleDelete(params.row.id)}
-                            size="small"
-                            sx={{ color: 'error.main' }}
-                        >
-                            <Delete fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+                    {!params.row.is_deleted && isSuperuser && (
+                        <Tooltip title="Eliminar">
+                            <IconButton 
+                                onClick={() => handleDelete(params.row.id)}
+                                size="small"
+                                sx={{ color: 'error.main' }}
+                            >
+                                <Delete fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                 </Box>
             )
         }
@@ -533,13 +588,29 @@ const ReportList = () => {
                     <Typography variant="h6">
                         Partes de trabajo
                     </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => navigate('/dashboard/reports/create')}
-                    >
-                        Nuevo Parte
-                    </Button>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        {isSuperuser && (
+                            <FormControl sx={{ minWidth: 150 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={showDeleted}
+                                            onChange={(e) => setShowDeleted(e.target.checked)}
+                                            name="showDeleted"
+                                        />
+                                    }
+                                    label="Mostrar eliminados"
+                                />
+                            </FormControl>
+                        )}
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => navigate('/dashboard/reports/create')}
+                        >
+                            Nuevo Parte
+                        </Button>
+                    </Box>
                 </Box>
 
                 <Paper sx={{ flexGrow: 1, width: '100%' }}>
