@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Button, Paper, 
     FormControl, InputLabel, Select, MenuItem,
-    TextField, InputAdornment, Chip, Tooltip, IconButton
+    TextField, InputAdornment, Chip, Tooltip, IconButton, FormControlLabel, Switch
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -30,21 +30,48 @@ const TicketList = () => {
     // Estado para controlar los permisos del usuario actual
     const [isSuperuser, setIsSuperuser] = useState(false);
 
+    // Añadir un estado para controlar la visualización de tickets eliminados
+    const [showDeleted, setShowDeleted] = useState(false);
+
     useEffect(() => {
-        fetchTickets();
+        if (showDeleted) {
+            fetchDeletedTickets();
+        } else {
+            fetchTickets();
+        }
         const user = JSON.parse(localStorage.getItem('user'));
         setIsSuperuser(user?.type === 'SuperAdmin' || user?.type === 'Admin');
-    }, []);
+    }, [showDeleted]);
 
     const fetchTickets = async () => {
         try {
             setLoading(true);
             const response = await axios.get('/tickets/tickets/');
+            
+            // Filtrar tickets eliminados a menos que showDeleted esté activo
+            const tickets = response.data.results || response.data;
+            setTickets(tickets);
+            setTotalCount(response.data.count || tickets.length);
+        } catch (error) {
+            console.error('Error fetching tickets:', error);
+            toast.error('Error al cargar la lista de tickets');
+            setTickets([]);
+            setTotalCount(0);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Función para cargar tickets eliminados
+    const fetchDeletedTickets = async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get('/tickets/tickets/deleted/');
             setTickets(response.data.results || response.data);
             setTotalCount(response.data.count || response.data.length);
         } catch (error) {
-            console.error('Error al cargar tickets:', error);
-            toast.error('Error al cargar la lista de tickets', { position: 'top-right' });
+            console.error('Error al cargar tickets eliminados:', error);
+            toast.error('Error al cargar la lista de tickets eliminados', { position: 'top-right' });
             setTickets([]);
             setTotalCount(0);
         } finally {
@@ -170,7 +197,7 @@ const TicketList = () => {
         try {
             const result = await Swal.fire({
                 title: '¿Estás seguro?',
-                text: `¿Quieres eliminar el ticket ${ticket.ticket_number || '#' + ticket.id}? Esta acción no se puede deshacer.`,
+                text: `¿Quieres eliminar el ticket ${ticket.ticket_number || '#' + ticket.id}?`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
@@ -180,7 +207,23 @@ const TicketList = () => {
             });
 
             if (result.isConfirmed) {
-                await axios.delete(`/tickets/tickets/${ticket.id}/`);
+                // Preguntar qué hacer con los materiales
+                const { isConfirmed: returnMaterials } = await Swal.fire({
+                    title: 'Materiales del ticket',
+                    text: '¿Desea devolver los materiales al stock?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, devolver al stock',
+                    cancelButtonText: 'No, mantener registros'
+                });
+
+                // Enviar la petición con el parámetro para devolver o no los materiales
+                await axios.delete(`/tickets/tickets/${ticket.id}/`, {
+                    params: { return_materials: returnMaterials ? 1 : 0 }
+                });
+                
                 fetchTickets(); // Refrescar la lista
                 toast.success('Ticket eliminado correctamente', { position: 'top-right' });
             }
@@ -198,6 +241,7 @@ const TicketList = () => {
     
     // Columnas para el DataGrid
     const columns = [
+        // Modificar la columna ticket_number para eliminar el indicador de "Eliminado"
         {
             field: 'ticket_number',
             headerName: 'Nº',
@@ -254,24 +298,52 @@ const TicketList = () => {
                 </Box>
             )
         },
+        // Modificar la columna status para mostrar una diferencia visual en tickets eliminados
         {
             field: 'status',
             headerName: 'Estado',
             width: 120,
             renderCell: (params) => {
-                const status = params.value || 'PENDING';
+                const status = params.row.status;
+                const isDeleted = params.row.is_deleted;
+                
+                let label = '';
+                let color = 'default';
+                
+                if (isDeleted) {
+                    label = 'Eliminado';
+                    color = 'error';
+                } else {
+                    switch (status) {
+                        case 'PENDING': 
+                            label = 'Pendiente'; 
+                            color = 'warning'; 
+                            break;
+                        case 'PAID': 
+                            label = 'Pagado'; 
+                            color = 'success'; 
+                            break;
+                        case 'CANCELED': 
+                            label = 'Cancelado'; 
+                            color = 'error'; 
+                            break;
+                        default: 
+                            label = status || 'Desconocido'; 
+                            color = 'default';
+                    }
+                }
+                
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                        <Chip
+                        <Chip 
+                            label={label}
+                            color={color}
                             size="small"
-                            label={getStatusLabel(status)}
-                            sx={{
-                                color: getStatusColor(status),
-                                border: `1px solid ${getStatusColor(status)}`,
-                                backgroundColor: 'transparent',
-                                fontWeight: 500
-                            }}
-                            variant="outlined"
+                            variant={isDeleted ? "filled" : "outlined"}
+                            title={params.row.deleted_at && isDeleted ? 
+                                `Eliminado el ${format(new Date(params.row.deleted_at), 'dd/MM/yyyy HH:mm')}` : 
+                                undefined
+                            }
                         />
                     </Box>
                 );
@@ -340,31 +412,59 @@ const TicketList = () => {
                         </IconButton>
                     </Tooltip>
                     
-                    {(!params.row.status || params.row.status === 'PENDING') && (
-                        <Tooltip title="Procesar pago">
-                            <IconButton
-                                onClick={() => handlePayTicket(params.row)}
-                                size="small"
-                                sx={{ color: 'success.main' }}
-                            >
-                                <CreditCard fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
+                    {!showDeleted && (
+                        <>
+                            {(!params.row.status || params.row.status === 'PENDING') && (
+                                <Tooltip title="Procesar pago">
+                                    <IconButton
+                                        onClick={() => handlePayTicket(params.row)}
+                                        size="small"
+                                        sx={{ color: 'success.main' }}
+                                    >
+                                        <CreditCard fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                            
+                            {(!params.row.status || params.row.status === 'PENDING') && (
+                                <Tooltip title="Cancelar ticket">
+                                    <IconButton
+                                        onClick={() => handleCancelTicket(params.row)}
+                                        size="small"
+                                        sx={{ color: 'error.main' }}
+                                    >
+                                        <Cancel fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                            
+                            {(params.row.status === 'PAID' || params.row.status === 'CANCELED') && (
+                                <Tooltip title="Imprimir">
+                                    <IconButton
+                                        onClick={() => handlePrintTicket(params.row.id)}
+                                        size="small"
+                                        sx={{ color: 'text.secondary' }}
+                                    >
+                                        <Print fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                            
+                            {isSuperuser && (
+                                <Tooltip title="Eliminar">
+                                    <IconButton
+                                        onClick={() => handleDeleteTicket(params.row)}
+                                        size="small"
+                                        sx={{ color: 'error.main' }}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </>
                     )}
-                    
-                    {(!params.row.status || params.row.status === 'PENDING') && (
-                        <Tooltip title="Cancelar ticket">
-                            <IconButton
-                                onClick={() => handleCancelTicket(params.row)}
-                                size="small"
-                                sx={{ color: 'error.main' }}
-                            >
-                                <Cancel fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
-                    
-                    {(params.row.status === 'PAID' || params.row.status === 'CANCELED') && (
+
+                    {showDeleted && (
                         <Tooltip title="Imprimir">
                             <IconButton
                                 onClick={() => handlePrintTicket(params.row.id)}
@@ -375,18 +475,6 @@ const TicketList = () => {
                             </IconButton>
                         </Tooltip>
                     )}
-                    
-                    {isSuperuser && (
-                        <Tooltip title="Eliminar">
-                            <IconButton
-                                onClick={() => handleDeleteTicket(params.row)}
-                                size="small"
-                                sx={{ color: 'error.main' }}
-                            >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
                 </Box>
             )
         }
@@ -394,6 +482,11 @@ const TicketList = () => {
 
     // Filtrar tickets
     const filteredTickets = tickets.filter(ticket => {
+        // No mostrar tickets eliminados a menos que showDeleted esté activo
+        if (!showDeleted && ticket.is_deleted) {
+            return false;
+        }
+        
         // Aplicar filtro por término de búsqueda
         const matchesSearch = !searchTerm || 
             ticket.ticket_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -497,6 +590,21 @@ const TicketList = () => {
                                 <MenuItem value="CANCELED">Cancelados</MenuItem>
                             </Select>
                         </FormControl>
+
+                        {isSuperuser && (
+                            <FormControl sx={{ minWidth: 150 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={showDeleted}
+                                            onChange={(e) => setShowDeleted(e.target.checked)}
+                                            name="showDeleted"
+                                        />
+                                    }
+                                    label="Mostrar eliminados"
+                                />
+                            </FormControl>
+                        )}
                     </Box>
                 </Paper>
 

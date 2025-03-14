@@ -68,7 +68,7 @@ class TicketSerializer(serializers.ModelSerializer):
             'created_at', 'created_at_formatted', 'created_by', 'created_by_username',
             'status', 'status_display', 'payment_method', 'payment_method_display',
             'total_amount', 'notes', 'paid_at', 'paid_at_formatted',
-            'canceled_at', 'canceled_at_formatted', 'pdf_file', 'items'
+            'canceled_at', 'canceled_at_formatted', 'pdf_file', 'items', 'is_deleted', 'deleted_at'
         ]
         read_only_fields = ['id', 'ticket_number', 'created_at', 'created_by', 
                            'paid_at', 'canceled_at', 'total_amount', 'pdf_file']

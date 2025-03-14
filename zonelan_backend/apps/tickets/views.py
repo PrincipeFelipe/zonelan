@@ -51,7 +51,14 @@ class TicketViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'total_amount', 'status']
     
     def get_queryset(self):
-        return Ticket.objects.filter(is_deleted=False).order_by('-created_at')
+        """
+        Filtrar los tickets según los permisos del usuario y excluir los eliminados.
+        """
+        # Filtrar por eliminados
+        queryset = Ticket.objects.filter(is_deleted=False).order_by('-created_at')
+        
+        # Aplicar filtros adicionales si es necesario
+        return queryset
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -225,6 +232,30 @@ class TicketViewSet(viewsets.ModelViewSet):
             )
         
         try:
+            # Verificar si se deben devolver los materiales al inventario
+            return_materials = request.query_params.get('return_materials', '0') == '1'
+            
+            if return_materials:
+                # Devolver los materiales al inventario
+                for item in ticket.items.all():
+                    # Si el ticket no fue cancelado (ya que entonces ya se devolvieron los materiales)
+                    if ticket.status != 'CANCELED':
+                        # Registrar la devolución del material
+                        MaterialControl.objects.create(
+                            user=request.user,
+                            material=item.material,
+                            quantity=item.quantity,
+                            operation='ADD',
+                            reason='DEVOLUCION',
+                            ticket=ticket,
+                            date=timezone.now(),
+                            notes=f"Devolución por eliminación de ticket #{ticket.ticket_number or ticket.id}"
+                        )
+                        
+                        # Devolver el material al inventario
+                        item.material.quantity += item.quantity
+                        item.material.save(update_fields=['quantity'])
+            
             # Marcar como eliminado en lugar de eliminar físicamente
             ticket.is_deleted = True
             ticket.deleted_at = timezone.now()
@@ -299,6 +330,51 @@ class TicketViewSet(viewsets.ModelViewSet):
                 )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'], url_path='deleted')
+    def list_deleted(self, request):
+        """
+        Listar tickets eliminados (solo superusuarios)
+        """
+        # Verificar permisos
+        if not request.user.is_superuser and not getattr(request.user, 'type', '') != 'SuperAdmin':
+            return Response(
+                {"detail": "Solo los superusuarios pueden ver tickets eliminados."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Obtener tickets eliminados
+        queryset = Ticket.objects.filter(is_deleted=True).order_by('-deleted_at')
+        
+        # Aplicar paginación
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def get_object(self):
+        """
+        Permite obtener tickets eliminados si se especifica en la consulta
+        """
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
+        
+        if include_deleted and self.request.user.is_superuser:
+            queryset = Ticket.objects.all()  # Incluir eliminados
+        else:
+            queryset = Ticket.objects.filter(is_deleted=False)
+        
+        # Continuar con el comportamiento estándar
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
+        obj = get_object_or_404(queryset, **filter_kwargs)
+        
+        # Verificar permisos
+        self.check_object_permissions(self.request, obj)
+        
+        return obj
 
 
 class TicketItemViewSet(viewsets.ModelViewSet):

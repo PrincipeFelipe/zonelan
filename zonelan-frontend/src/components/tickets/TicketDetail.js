@@ -5,7 +5,7 @@ import {
     TableCell, TableContainer, TableHead, TableRow,
     Card, CardContent, Grid, Divider, Chip, IconButton,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    Alert, CircularProgress
+    Alert, CircularProgress, AlertTitle
 } from '@mui/material';
 import {
     ArrowBack, Print, Delete, Add, CreditCard, Cancel
@@ -26,7 +26,8 @@ const TicketDetail = () => {
         printTicket, 
         markAsPaid, 
         cancelTicket, 
-        removeTicketItem
+        removeTicketItem,
+        deleteTicket
     } = useTickets();
     const [ticket, setTicket] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -39,13 +40,24 @@ const TicketDetail = () => {
     const fetchTicket = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`/tickets/tickets/${id}/`);
+            // Añadir el parámetro include_deleted=true para obtener también tickets eliminados
+            const response = await axios.get(`/tickets/tickets/${id}/`, {
+                params: { include_deleted: true }
+            });
             
             // Convertir campos numéricos a números para evitar problemas con .toFixed()
             if (response.data) {
+                // Asegurarse explícitamente que is_deleted sea un booleano
+                const isDeleted = response.data.is_deleted === true || 
+                                  response.data.is_deleted === "true" || 
+                                  response.data.is_deleted === 1 || 
+                                  response.data.is_deleted === "1";
+                
                 const ticketData = {
                     ...response.data,
                     total_amount: parseFloat(response.data.total_amount || 0),
+                    // Forzar la evaluación booleana
+                    is_deleted: isDeleted,
                     items: Array.isArray(response.data.items) ? response.data.items.map(item => ({
                         ...item,
                         quantity: parseFloat(item.quantity || 0),
@@ -55,6 +67,15 @@ const TicketDetail = () => {
                     })) : []
                 };
                 setTicket(ticketData);
+                
+                // Mostrar en consola para depuración
+                console.log("Datos del ticket:", {
+                    id: ticketData.id,
+                    deleted: ticketData.is_deleted,
+                    originalDeleted: response.data.is_deleted,
+                    deleted_at: ticketData.deleted_at,
+                    status: ticketData.status
+                });
             } else {
                 toast.error('No se encontró información del ticket');
                 navigate('/dashboard/tickets');
@@ -185,6 +206,45 @@ const TicketDetail = () => {
         }
     };
 
+    const handleDeleteTicket = async () => {
+        try {
+            const { isConfirmed } = await Swal.fire({
+                title: '¿Eliminar Ticket?',
+                text: `¿Está seguro de eliminar el ticket #${ticket.ticket_number}? Esta acción no se puede deshacer.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (isConfirmed) {
+                // Preguntar qué hacer con los materiales
+                const { isConfirmed: returnMaterials } = await Swal.fire({
+                    title: 'Materiales del ticket',
+                    text: '¿Desea devolver los materiales al stock?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, devolver al stock',
+                    cancelButtonText: 'No, mantener registros'
+                });
+
+                // Usar el hook useTickets para eliminar el ticket
+                await deleteTicket(ticket.id, returnMaterials);
+                
+                // Redirigir a la lista de tickets
+                toast.success('Ticket eliminado correctamente');
+                navigate('/dashboard/tickets');
+            }
+        } catch (error) {
+            console.error('Error al eliminar ticket:', error);
+            toast.error('Error al eliminar el ticket');
+        }
+    };
+
     const getStatusLabel = (status) => {
         switch (status) {
             case 'PENDING': return 'Pendiente';
@@ -203,6 +263,8 @@ const TicketDetail = () => {
         }
     };
 
+    const isTicketDeleted = Boolean(ticket?.is_deleted);
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
@@ -219,6 +281,41 @@ const TicketDetail = () => {
 
     return (
         <>
+            {/* Banner superior para tickets eliminados - mantener este como único indicador principal */}
+            {isTicketDeleted && (
+                <Paper 
+                    sx={{ 
+                        p: 1.5, 
+                        mb: 3, 
+                        backgroundColor: '#ffebee', 
+                        borderLeft: '5px solid #d32f2f',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Delete color="error" sx={{ mr: 1 }} />
+                        <Typography variant="h6" color="error">
+                            TICKET ELIMINADO
+                            {ticket.deleted_at && (
+                                <Typography component="span" variant="body2" sx={{ ml: 1 }}>
+                                    el {format(new Date(ticket.deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                </Typography>
+                            )}
+                        </Typography>
+                    </Box>
+                    <Button 
+                        variant="outlined" 
+                        color="error"
+                        size="small" 
+                        onClick={() => navigate('/dashboard/tickets')}
+                    >
+                        Volver a la lista
+                    </Button>
+                </Paper>
+            )}
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Button
@@ -235,9 +332,18 @@ const TicketDetail = () => {
                         color={getStatusColor(ticket.status)}
                         size="small"
                     />
+                    {/* Mantener solo el chip como indicador adicional más discreto */}
+                    {isTicketDeleted && (
+                        <Chip 
+                            label="Eliminado" 
+                            color="error"
+                            size="small"
+                            sx={{ ml: 1 }}
+                        />
+                    )}
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    {ticket.status === 'PENDING' && (
+                    {ticket.status === 'PENDING' && !ticket.is_deleted && (
                         <>
                             <Button
                                 variant="outlined"
@@ -268,7 +374,7 @@ const TicketDetail = () => {
                         </>
                     )}
 
-                    {(ticket.status === 'PAID' || ticket.status === 'CANCELED') && (
+                    {(ticket.status === 'PAID' || ticket.status === 'CANCELED') && !ticket.is_deleted && (
                         <Button
                             variant="outlined"
                             startIcon={<Print />}

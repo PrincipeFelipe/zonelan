@@ -15,6 +15,8 @@ class MaterialControlSerializer(serializers.ModelSerializer):
     ticket_id = serializers.PrimaryKeyRelatedField(source='ticket', read_only=True)
     # Asegurarse de que movement_id está explícitamente incluido
     movement_id = serializers.IntegerField(read_only=True)
+    ticket_deleted = serializers.SerializerMethodField()
+    ticket_deleted_at = serializers.SerializerMethodField()
     
     class Meta:
         model = MaterialControl
@@ -22,5 +24,15 @@ class MaterialControlSerializer(serializers.ModelSerializer):
             'id', 'user', 'username', 'material', 'material_name', 'quantity', 
             'operation', 'operation_display', 'reason', 'reason_display', 
             'date', 'report', 'report_id', 'ticket', 'ticket_id', 
-            'movement_id', 'location_reference', 'invoice_image'
+            'movement_id', 'location_reference', 'invoice_image', 'ticket_deleted', 'ticket_deleted_at'
         ]
+    
+    def get_ticket_deleted(self, obj):
+        if obj.ticket:
+            return obj.ticket.is_deleted
+        return False
+
+    def get_ticket_deleted_at(self, obj):
+        if obj.ticket and obj.ticket.is_deleted and obj.ticket.deleted_at:
+            return obj.ticket.deleted_at
+        return None

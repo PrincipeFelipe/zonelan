@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton,
     Typography, Box, Grid, Chip, Divider, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, CircularProgress
+    TableContainer, TableHead, TableRow, CircularProgress, Alert, AlertTitle
 } from '@mui/material';
-import { Close, Receipt, Person, Event, Print } from '@mui/icons-material';
+import { Close, Receipt, Person, Event, Print, Delete } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import axios from '../../utils/axiosConfig';
@@ -27,12 +27,23 @@ const TicketDetailModal = ({ open, onClose, ticketId }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get(`/tickets/tickets/${id}/`);
+            const response = await axios.get(`/tickets/tickets/${id}/`, {
+                params: { include_deleted: true }
+            });
+            
             // Convertir números para evitar problemas con formateo
             if (response.data) {
+                // Asegurarnos de que is_deleted se interprete correctamente como booleano
+                const isDeleted = response.data.is_deleted === true || 
+                                  response.data.is_deleted === "true" || 
+                                  response.data.is_deleted === 1 || 
+                                  response.data.is_deleted === "1";
+                                  
                 const ticketData = {
                     ...response.data,
                     total_amount: parseFloat(response.data.total_amount || 0),
+                    // Asegurar interpretación booleana correcta
+                    is_deleted: isDeleted,
                     items: Array.isArray(response.data.items) ? response.data.items.map(item => ({
                         ...item,
                         quantity: parseFloat(item.quantity || 0),
@@ -120,6 +131,16 @@ const TicketDetailModal = ({ open, onClose, ticketId }) => {
                                 sx={{ ml: 1 }} 
                             />
                         )}
+                        {/* Añadir indicador de eliminado */}
+                        {ticket && ticket.is_deleted && (
+                            <Chip 
+                                label="Eliminado" 
+                                color="error" 
+                                size="small" 
+                                sx={{ ml: 1 }}
+                                icon={<Delete fontSize="small" />}
+                            />
+                        )}
                     </Box>
                     <IconButton onClick={onClose}>
                         <Close />
@@ -136,6 +157,20 @@ const TicketDetailModal = ({ open, onClose, ticketId }) => {
                     <Typography color="error">{error}</Typography>
                 ) : ticket ? (
                     <>
+                        {/* Mostrar alerta cuando el ticket está eliminado */}
+                        {ticket.is_deleted && (
+                            <Alert 
+                                severity="warning" 
+                                sx={{ mb: 2 }}
+                                icon={<Delete color="error" />}
+                            >
+                                <AlertTitle>Ticket eliminado</AlertTitle>
+                                Este ticket ha sido eliminado
+                                {ticket.deleted_at && (
+                                    <> el {formatDate(ticket.deleted_at)}</>
+                                )}.
+                            </Alert>
+                        )}
                         <Grid container spacing={3}>
                             <Grid item xs={12} sm={6}>
                                 <Box sx={{ mb: 2 }}>

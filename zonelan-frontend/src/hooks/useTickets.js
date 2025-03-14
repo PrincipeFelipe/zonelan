@@ -121,11 +121,13 @@ export const useTickets = () => {
     };
 
     // Obtener un ticket por ID
-    const getTicket = async (id) => {
+    const getTicket = async (id, includeDeleted = true) => {
         try {
             setLoading(true);
             toast.loading('Obteniendo información del ticket...', { id: 'get-ticket' });
-            const response = await axios.get(`/tickets/tickets/${id}/`);
+            const response = await axios.get(`/tickets/tickets/${id}/`, {
+                params: { include_deleted: includeDeleted }
+            });
             toast.dismiss('get-ticket');
             return response.data;
         } catch (error) {
@@ -360,11 +362,15 @@ export const useTickets = () => {
     };
 
     // Añadir función para eliminar ticket (solo superuser)
-    const deleteTicket = async (id) => {
+    const deleteTicket = async (id, returnMaterials = false) => {
         try {
             setLoading(true);
             toast.loading('Eliminando ticket...', { id: 'delete-ticket' });
-            await axios.delete(`/tickets/tickets/${id}/`);
+            
+            await axios.delete(`/tickets/tickets/${id}/`, {
+                params: { return_materials: returnMaterials ? 1 : 0 }
+            });
+            
             toast.dismiss('delete-ticket');
             toast.success('Ticket eliminado correctamente', { position: 'top-right', id: 'delete-ticket-success' });
             return true;

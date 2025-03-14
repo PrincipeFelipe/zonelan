@@ -3,12 +3,12 @@ import {
     Box, Typography, Paper, Button, TextField, InputAdornment,
     Grid, FormControl, InputLabel, Select, MenuItem, IconButton,
     Tooltip, Chip, Link, Dialog, DialogTitle, DialogContent,
-    DialogActions, CircularProgress, LinearProgress
+    DialogActions, CircularProgress, LinearProgress, Alert, AlertTitle
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import {
     Search, Clear, Visibility, ReceiptOutlined, Close, 
-    ArrowDownward, ArrowUpward, ImportExport, FilterList
+    ArrowDownward, ArrowUpward, ImportExport, FilterList, Delete
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,6 +18,7 @@ import { getMediaUrl } from '../../utils/helpers';
 import { getMaterialMovementById } from '../../services/storageService';
 import ReportDetailModal from '../reports/ReportDetailModal';
 import TicketDetailModal from '../tickets/TicketDetailModal';
+import { useNavigate } from 'react-router-dom';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
@@ -56,6 +57,8 @@ const MaterialControlList = () => {
     // Añadir estos estados después de las otras declaraciones de estado (alrededor de la línea 50)
     const [openControlDetailDialog, setOpenControlDetailDialog] = useState(false);
     const [selectedControl, setSelectedControl] = useState(null);
+
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchMaterialControls();
@@ -247,6 +250,7 @@ const MaterialControlList = () => {
         setOpenReportDialog(true);
     };
 
+    // Modificar la función handleViewTicket para abrir el modal en lugar de redirigir
     const handleViewTicket = (ticketId) => {
         setSelectedTicketId(ticketId);
         setOpenTicketDialog(true);
@@ -1093,16 +1097,37 @@ const columns = [
                                     <Typography variant="subtitle1" gutterBottom fontWeight="bold">
                                         Ticket asociado
                                     </Typography>
-                                    <Link 
-                                        component="button"
-                                        onClick={() => {
-                                            handleCloseControlDetailDialog();
-                                            handleViewTicket(selectedControl.ticket_id);
-                                        }}
-                                        color="primary"
-                                    >
-                                        Ver Ticket #{selectedControl.ticket_id}
-                                    </Link>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Link 
+                                            component="button"
+                                            onClick={() => {
+                                                handleCloseControlDetailDialog();
+                                                handleViewTicket(selectedControl.ticket_id);
+                                            }}
+                                            color={selectedControl.ticket_deleted ? "error" : "primary"}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            {selectedControl.ticket_deleted && <Delete fontSize="small" sx={{ mr: 0.5, color: 'error.main' }} />}
+                                            Ver Ticket #{selectedControl.ticket_id}
+                                        </Link>
+                                        {selectedControl.ticket_deleted && (
+                                            <Chip 
+                                                label="Eliminado" 
+                                                color="error"
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ ml: 1 }}
+                                            />
+                                        )}
+                                    </Box>
+                                    {selectedControl.ticket_deleted && selectedControl.ticket_deleted_at && (
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                            Eliminado el {format(new Date(selectedControl.ticket_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                        </Typography>
+                                    )}
                                 </Grid>
                             )}
                             
@@ -1140,6 +1165,21 @@ const columns = [
                                         Ver albarán
                                     </Button>
                                 </Grid>
+                            )}
+
+                            {/* En el diálogo de detalles del control, antes de mostrar los detalles */}
+                            {selectedControl && selectedControl.ticket_deleted && (
+                                <Alert 
+                                    severity="warning" 
+                                    sx={{ mb: 2 }}
+                                    icon={<Delete color="error" />}
+                                >
+                                    <AlertTitle>Ticket eliminado</AlertTitle>
+                                    Este control de material está asociado a un ticket que ha sido eliminado
+                                    {selectedControl.ticket_deleted_at && (
+                                        <> el {format(new Date(selectedControl.ticket_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}</>
+                                    )}.
+                                </Alert>
                             )}
                         </Grid>
                     ) : (

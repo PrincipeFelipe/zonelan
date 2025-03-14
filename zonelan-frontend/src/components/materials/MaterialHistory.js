@@ -99,12 +99,18 @@ const MaterialHistory = ({ open, onClose, material }) => {
         }
     };
 
-    // Función mejorada para las etiquetas de motivo
-    const getReasonLabel = (reason, report, reportDeleted, ticket, ticketCanceled) => {
+    // Modificar la función getReasonLabel para mostrar tickets eliminados
+    const getReasonLabel = (reason, report, reportDeleted, ticket, ticketCanceled, ticketDeleted) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
             case 'VENTA': 
-                return ticket ? `Venta en ticket #${ticket}` : 'Venta';
+                if (ticket) {
+                    if (ticketDeleted) {
+                        return `Venta en ticket #${ticket} (Eliminado)`;
+                    }
+                    return `Venta en ticket #${ticket}`;
+                }
+                return 'Venta';
             case 'RETIRADA': return 'Retirada';
             case 'USO': 
                 return report ? `Uso en reporte #${report}` : 'Uso';
@@ -114,6 +120,9 @@ const MaterialHistory = ({ open, onClose, material }) => {
                 }
                 if (ticket && ticketCanceled) {
                     return `Devolución por cancelación de ticket #${ticket}`;
+                }
+                if (ticket && ticketDeleted) {
+                    return `Devolución por eliminación de ticket #${ticket}`;
                 }
                 if (ticket) {
                     return `Devolución de producto en ticket #${ticket}`;
@@ -164,7 +173,8 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                                     record.report, 
                                                     record.report_deleted,
                                                     record.ticket,
-                                                    record.ticket_canceled
+                                                    record.ticket_canceled,
+                                                    record.ticket_deleted // Añadido este nuevo parámetro
                                                 )}
                                                 color={getReasonColor(record.reason)}
                                                 size="small"
