@@ -17,7 +17,13 @@ import {
     IconButton,
     Typography,
 } from '@mui/material';
-import { ReceiptOutlined, Close } from '@mui/icons-material';
+import { 
+    ReceiptOutlined, 
+    Close, 
+    ArrowUpward,
+    ArrowDownward,
+    SwapHoriz
+} from '@mui/icons-material';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
 
 const MaterialHistory = ({ open, onClose, material }) => {
@@ -49,10 +55,37 @@ const MaterialHistory = ({ open, onClose, material }) => {
         setOpenInvoice(true);
     };
 
+    // Función actualizada para los colores de operación
     const getOperationColor = (operation) => {
-        return operation === 'ADD' ? 'success' : 'error';
+        switch (operation) {
+            case 'ADD': return 'success';
+            case 'REMOVE': return 'error';
+            case 'TRANSFER': return 'info';
+            default: return 'default';
+        }
     };
 
+    // Función actualizada para los iconos de operación
+    const getOperationIcon = (operation) => {
+        switch (operation) {
+            case 'ADD': return <ArrowUpward fontSize="small" />;
+            case 'REMOVE': return <ArrowDownward fontSize="small" />;
+            case 'TRANSFER': return <SwapHoriz fontSize="small" />;
+            default: return null;
+        }
+    };
+
+    // Función actualizada para las etiquetas de operación
+    const getOperationLabel = (operation) => {
+        switch (operation) {
+            case 'ADD': return 'Entrada';
+            case 'REMOVE': return 'Salida';
+            case 'TRANSFER': return 'Traslado';
+            default: return operation;
+        }
+    };
+
+    // Función actualizada para los colores de motivo
     const getReasonColor = (reason) => {
         switch (reason) {
             case 'COMPRA': return 'info';
@@ -60,10 +93,13 @@ const MaterialHistory = ({ open, onClose, material }) => {
             case 'RETIRADA': return 'secondary';
             case 'USO': return 'error';
             case 'DEVOLUCION': return 'success';
+            case 'TRASLADO': return 'info';
+            case 'CUADRE': return 'warning';
             default: return 'default';
         }
     };
 
+    // Función mejorada para las etiquetas de motivo
     const getReasonLabel = (reason, report, reportDeleted, ticket, ticketCanceled) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
@@ -83,7 +119,9 @@ const MaterialHistory = ({ open, onClose, material }) => {
                     return `Devolución de producto en ticket #${ticket}`;
                 }
                 return 'Devolución';
-            default: return reason;
+            case 'TRASLADO': return 'Traslado';
+            case 'CUADRE': return 'Cuadre de inventario';
+            default: return reason.charAt(0).toUpperCase() + reason.slice(1).toLowerCase();
         }
     };
 
@@ -112,9 +150,11 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                         <TableCell>{record.user_name}</TableCell>
                                         <TableCell>
                                             <Chip
-                                                label={record.operation === 'ADD' ? 'Entrada' : 'Salida'}
+                                                label={getOperationLabel(record.operation)}
                                                 color={getOperationColor(record.operation)}
+                                                icon={getOperationIcon(record.operation)}
                                                 size="small"
+                                                variant="outlined"
                                             />
                                         </TableCell>
                                         <TableCell>
@@ -128,6 +168,7 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                                 )}
                                                 color={getReasonColor(record.reason)}
                                                 size="small"
+                                                variant="outlined"
                                             />
                                         </TableCell>
                                         <TableCell>{record.quantity}</TableCell>
@@ -135,11 +176,11 @@ const MaterialHistory = ({ open, onClose, material }) => {
                                             {new Date(record.date).toLocaleString()}
                                         </TableCell>
                                         <TableCell>
-                                            {record.invoice_url ? (
+                                            {record.invoice_image ? (
                                                 <IconButton 
                                                     color="primary" 
                                                     size="small"
-                                                    onClick={() => handleViewInvoice(record.invoice_url)}
+                                                    onClick={() => handleViewInvoice(record.invoice_image)}
                                                 >
                                                     <ReceiptOutlined />
                                                 </IconButton>
