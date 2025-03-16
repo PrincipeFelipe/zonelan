@@ -131,7 +131,10 @@ const WarehouseList = () => {
     }
   };
 
+  // Corrige la función handleViewDetails
   const handleViewDetails = (id) => {
+    // Añadir un console.log para depuración
+    console.log('Redirigiendo a:', `/dashboard/storage/warehouses/${id}`);
     navigate(`/dashboard/storage/warehouses/${id}`);
   };
 

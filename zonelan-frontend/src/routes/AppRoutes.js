@@ -10,7 +10,7 @@ import MaterialRoutes from './MaterialRoutes';
 import ReportRoutes from './ReportRoutes';
 import TicketRoutes from './TicketRoutes';
 import CustomerRoutes from './CustomerRoutes';
-import UserRoutes from './UserRoutes'; // Importar las rutas de usuarios
+import UserRoutes from './UserRoutes';
 
 import StorageDashboard from '../components/storage/dashboard/StorageDashboard';
 import WarehouseList from '../components/storage/warehouses/WarehouseList';
@@ -46,13 +46,16 @@ const AppRoutes = () => {
                     {/* Página principal del dashboard */}
                     <Route path="" element={<DashboardHome />} />
                     
+                    {/* ELIMINAR ESTA LÍNEA - no está definido StorageRoutes */}
+                    {/* <Route path="/dashboard/storage/*" element={<StorageRoutes />} /> */}
+                    
                     {/* Rutas anidadas */}
                     <Route path="incidents/*" element={<IncidentRoutes />} />
                     <Route path="materials/*" element={<MaterialRoutes />} />
                     <Route path="reports/*" element={<ReportRoutes />} />
                     <Route path="tickets/*" element={<TicketRoutes />} />
                     <Route path="customers/*" element={<CustomerRoutes />} />
-                    <Route path="users/*" element={<UserRoutes />} /> {/* Añadir esta línea */}
+                    <Route path="users/*" element={<UserRoutes />} />
 
                     {/* Rutas de almacenamiento */}
                     <Route path="storage">
@@ -60,6 +63,8 @@ const AppRoutes = () => {
                         <Route path="warehouses">
                             <Route index element={<WarehouseList />} />
                             <Route path="new" element={<WarehouseForm />} />
+                            {/* AÑADIR ESTA RUTA para ver detalles del almacén */}
+                            <Route path=":id" element={<WarehouseDetail />} />
                             <Route path=":warehouseId/edit" element={<WarehouseForm />} />
                             <Route path=":warehouseId/departments" element={<DepartmentList />} />
                             <Route path=":warehouseId/departments/new" element={<DepartmentForm />} />

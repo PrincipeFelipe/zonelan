@@ -19,7 +19,8 @@ import {
     Dialog,
     DialogContent,
     IconButton as MuiIconButton,
-    Autocomplete
+    Autocomplete,
+    Chip
 } from '@mui/material';
 import { Add, Delete, Save, ArrowBack, CloudUpload, Close, NavigateNext, NavigateBefore, DeleteOutline, Restore as RestoreIcon } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -738,18 +739,30 @@ const ReportForm = () => {
                             onChange={handleInputChange}
                         />
 
-                        <TextField
-                            fullWidth
-                            margin="normal"
-                            select
-                            name="status"
-                            label="Estado"
-                            value={report.status}
-                            onChange={handleInputChange}
-                        >
-                            <MenuItem value="DRAFT">Borrador</MenuItem>
-                            <MenuItem value="COMPLETED">Completado</MenuItem>
-                        </TextField>
+                        {isReportDeleted ? (
+                            <Box sx={{ mt: 2, mb: 1 }}>
+                                <Typography variant="body2" sx={{ mb: 1 }}>Estado:</Typography>
+                                <Chip 
+                                    label="Eliminado" 
+                                    color="error" 
+                                    variant="outlined" 
+                                    icon={<Delete fontSize="small" />}
+                                />
+                            </Box>
+                        ) : (
+                            <TextField
+                                fullWidth
+                                margin="normal"
+                                select
+                                name="status"
+                                label="Estado"
+                                value={report.status || ''}
+                                onChange={handleInputChange}
+                            >
+                                <MenuItem value="DRAFT">Borrador</MenuItem>
+                                <MenuItem value="COMPLETED">Completado</MenuItem>
+                            </TextField>
+                        )}
                     </Paper>
                 </Grid>
 
