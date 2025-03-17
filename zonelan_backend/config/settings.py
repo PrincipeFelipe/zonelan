@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'apps.reports.apps.ReportsConfig',
     'apps.tickets.apps.TicketsConfig',
     'apps.storage.apps.StorageConfig',  # Nueva app de almacenamiento
+    'apps.contracts.apps.ContractsConfig',
     'django_filters',
 ]
 
