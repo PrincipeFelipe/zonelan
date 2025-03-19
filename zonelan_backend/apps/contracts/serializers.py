@@ -24,15 +24,24 @@ class ContractDocumentSerializer(serializers.ModelSerializer):
 
 
 class MaintenanceRecordSerializer(serializers.ModelSerializer):
-    performed_by_name = serializers.ReadOnlyField(source='performed_by.name')
+    performed_by_name = serializers.SerializerMethodField()
+    maintenance_type_display = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
     
     class Meta:
         model = MaintenanceRecord
-        fields = '__all__'
+        fields = ['id', 'contract', 'date', 'maintenance_type', 'maintenance_type_display', 
+                 'technician', 'performed_by', 'performed_by_name', 
+                 'status', 'status_display', 'observations', 'created_at']
+    
+    def get_performed_by_name(self, obj):
+        return obj.performed_by.username if obj.performed_by else None
+    
+    def get_maintenance_type_display(self, obj):
+        return obj.maintenance_type_display
     
     def get_status_display(self, obj):
-        return dict(MaintenanceRecord.STATUS_CHOICES).get(obj.status, obj.status)
+        return obj.status_display
 
 
 class ContractReportSerializer(serializers.ModelSerializer):

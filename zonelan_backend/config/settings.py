@@ -41,6 +41,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.contracts.middleware.DocumentFrameMiddleware',  # Asegúrate de que esté aquí
 ]
 
 # Configuración de la raíz de las URLs
@@ -127,3 +128,7 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True  # Solo para desarrollo
 AUTH_USER_MODEL = 'users.User'  # Especificar el modelo de usuario personalizado
+
+# También añade esta configuración para permitir iframes del mismo origen por defecto
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+

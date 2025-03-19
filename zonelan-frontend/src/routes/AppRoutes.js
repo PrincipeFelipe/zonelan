@@ -30,6 +30,16 @@ import MaterialLocationForm from '../components/storage/locations/MaterialLocati
 import MaterialMovementList from '../components/storage/movements/MaterialMovementList';
 import MaterialMovementForm from '../components/storage/movements/MaterialMovementForm';
 
+import ContractDashboard from '../components/contracts/ContractDashboard';
+import ContractList from '../components/contracts/ContractList';
+import ContractForm from '../components/contracts/ContractForm';
+import ContractDetail from '../components/contracts/ContractDetail';
+import DocumentList from '../components/contracts/DocumentList';
+import DocumentUpload from '../components/contracts/DocumentUpload';
+import MaintenanceList from '../components/contracts/MaintenanceList';
+import ReportList from '../components/contracts/ReportList';
+import ReportForm from '../components/contracts/ReportForm';
+
 const AppRoutes = () => {
     return (
         <Router>
@@ -95,6 +105,21 @@ const AppRoutes = () => {
                             <Route path="new" element={<MaterialMovementForm />} />
                             <Route path=":id" element={<MaterialMovementForm />} />
                         </Route>
+                    </Route>
+
+                    {/* Rutas de contratos */}
+                    <Route path="contracts">
+                        <Route index element={<ContractDashboard />} />
+                        <Route path="list" element={<ContractList />} />
+                        <Route path="new" element={<ContractForm />} />
+                        <Route path=":id" element={<ContractDetail />} />
+                        <Route path=":id/edit" element={<ContractForm />} />
+                        <Route path=":id/documents" element={<DocumentList />} />
+                        <Route path=":id/documents/new" element={<DocumentUpload />} />
+                        <Route path=":id/maintenances" element={<MaintenanceList />} />
+                        <Route path=":id/reports" element={<ReportList />} />
+                        <Route path=":id/reports/new" element={<ReportForm />} />
+                        <Route path=":id/reports/:reportId" element={<ReportForm />} />
                     </Route>
                 </Route>
                 

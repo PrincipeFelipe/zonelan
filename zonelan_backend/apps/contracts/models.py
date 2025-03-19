@@ -132,10 +132,20 @@ class MaintenanceRecord(models.Model):
     """
     Registro de los mantenimientos realizados a los contratos.
     """
+    # Añadir opciones para el tipo de mantenimiento
+    MAINTENANCE_TYPE_CHOICES = [
+        ('PREVENTIVE', 'Preventivo'),
+        ('CORRECTIVE', 'Correctivo'),
+        ('EMERGENCY', 'Emergencia'),
+        ('INSPECTION', 'Inspección'),
+    ]
+    
+    # Ampliar opciones de estado para incluir IN_PROGRESS y CANCELLED
     STATUS_CHOICES = [
+        ('PENDING', 'Pendiente'),
+        ('IN_PROGRESS', 'En Progreso'),
         ('COMPLETED', 'Completado'),
-        ('PARTIAL', 'Parcial'),
-        ('PENDING', 'Pendiente')
+        ('CANCELLED', 'Cancelado'),
     ]
     
     contract = models.ForeignKey(
@@ -145,21 +155,45 @@ class MaintenanceRecord(models.Model):
         verbose_name='Contrato'
     )
     date = models.DateField(verbose_name='Fecha de mantenimiento')
+    
+    # Añadir campo para tipo de mantenimiento
+    maintenance_type = models.CharField(
+        max_length=20,
+        choices=MAINTENANCE_TYPE_CHOICES,
+        default='PREVENTIVE',
+        verbose_name='Tipo de mantenimiento'
+    )
+    
+    # Campo para técnico (string en lugar de FK)
+    technician = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        verbose_name='Técnico'
+    )
+    
+    # Mantener el performed_by como FK hacia User
     performed_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         related_name='performed_maintenances',
         verbose_name='Realizado por'
     )
+    
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='COMPLETED',
+        default='PENDING',  # Cambiar default a PENDING para coincidir con frontend
         verbose_name='Estado'
     )
-    notes = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+    
+    # Renombrar notes a observations para coincidir con el frontend
+    observations = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)  # Añadir campo de fecha de actualización
 
     class Meta:
         verbose_name = 'Registro de mantenimiento'
@@ -168,6 +202,21 @@ class MaintenanceRecord(models.Model):
 
     def __str__(self):
         return f"Mantenimiento {self.contract.title} - {self.date}"
+    
+    @property
+    def performed_by_name(self):
+        """Devuelve el nombre de usuario de quien realizó el mantenimiento"""
+        return self.performed_by.username if self.performed_by else None
+    
+    @property
+    def maintenance_type_display(self):
+        """Devuelve el texto descriptivo del tipo de mantenimiento"""
+        return dict(self.MAINTENANCE_TYPE_CHOICES).get(self.maintenance_type, '')
+    
+    @property
+    def status_display(self):
+        """Devuelve el texto descriptivo del estado"""
+        return dict(self.STATUS_CHOICES).get(self.status, '')
     
     def save(self, *args, **kwargs):
         # Guardar el registro de mantenimiento

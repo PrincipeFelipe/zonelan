@@ -1,49 +1,89 @@
 import axios from 'axios';
 
+// URL base para todas las llamadas API
+const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+// Configuración básica
 const instance = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-    headers: {
-        'Content-Type': 'application/json'
-    }
+  baseURL
 });
 
-// Interceptor para añadir el token a las peticiones
-instance.interceptors.request.use(
-    config => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`;
-        }
-        return config;
-    },
-    error => Promise.reject(error)
-);
+// Interceptor para gestionar headers de autenticación y rutas API
+instance.interceptors.request.use(config => {
+  // Agregar token de autenticación a todas las solicitudes
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
 
-// Asegurarnos que el interceptor no redireccione de forma agresiva
-
-// Interceptor para manejar respuestas de error
-instance.interceptors.response.use(
-    response => response,
-    error => {
-        // Si el error es 401 (No autorizado), redirigir al login solo si:
-        // 1. No estamos ya en la página de login
-        // 2. No estamos intentando iniciar sesión
-        if (error.response && error.response.status === 401) {
-            // Limpiar datos de sesión
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            localStorage.removeItem('refresh');
-            
-            // Redirigir a login solo si no estamos en login o intentando hacer login
-            const isLoginPath = window.location.pathname.includes('/login');
-            const isLoginRequest = error.config.url.includes('/token/');
-            
-            if (!isLoginPath && !isLoginRequest) {
-                window.location.href = '/login';
-            }
-        }
-        return Promise.reject(error);
+  let url = config.url || '';
+  
+  // Si no comienza con http/https (URL completa)
+  if (!url.match(/^(http|https):\/\//)) {
+    // Asegurar que todas las llamadas API tengan el prefijo correcto
+    // y eliminar dobles barras
+    if (!url.startsWith('/')) {
+      url = `/${url}`;
     }
+    
+    // IMPORTANTE: ELIMINAR SIEMPRE el prefijo /api/ porque el backend no lo usa
+    if (url.startsWith('/api/')) {
+      url = url.substring(4); // Eliminar el '/api'
+    }
+    
+    // NO añadir el prefijo /api/ porque el backend no lo utiliza
+    
+    config.url = url;
+  }
+  
+  return config;
+});
+
+// Añadir después de los otros interceptores
+instance.interceptors.request.use(config => {
+    // Si hay parámetros de consulta, normalizarlos
+    if (config.params) {
+        const normalizedParams = {};
+        
+        Object.entries(config.params).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            
+            if (typeof value === 'object' && value !== null && 'id' in value) {
+                normalizedParams[key] = value.id;
+            } else {
+                normalizedParams[key] = value;
+            }
+        });
+        
+        config.params = normalizedParams;
+    }
+    
+    return config;
+});
+
+// Interceptor para manejar errores comunes
+instance.interceptors.response.use(
+  response => response,
+  error => {
+    // Centralizar manejo de errores
+    console.error('Error en petición API:', error);
+    
+    // Si el error es 401 (No autorizado), redirigir al login
+    if (error.response && error.response.status === 401) {
+      // Limpiar datos de sesión
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('refresh');
+      
+      // Redirigir a login (si no estamos ya en la página de login)
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    
+    return Promise.reject(error);
+  }
 );
 
 export const getMediaUrl = (imageUrl) => {

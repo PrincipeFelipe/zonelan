@@ -12,7 +12,7 @@ urlpatterns = [
     path('reports/', include('apps.reports.urls')),
     path('tickets/', include('apps.tickets.urls')),
     path('storage/', include('apps.storage.urls')),
-    path('contracts/', include('apps.contracts.urls')),
+    path('contracts/', include('apps.contracts.urls')),  # Asegúrate de que sea 'apps.contracts.urls'
 ]
 
 # Añadir esta configuración para servir archivos multimedia en desarrollo
