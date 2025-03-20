@@ -24,7 +24,22 @@ class ContractDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(ContractReport)
 class ContractReportAdmin(admin.ModelAdmin):
-    list_display = ('title', 'contract', 'date', 'performed_by', 'status', 'is_completed')
-    list_filter = ('status', 'is_completed', 'contract')
-    search_fields = ('title', 'description', 'contract__title')
-    date_hierarchy = 'date'
+    list_display = ['id', 'contract', 'date', 'status', 'hours_worked', 'is_deleted']
+    list_filter = ['contract', 'status', 'date', 'is_deleted']
+    search_fields = ['description', 'contract__title']
+    readonly_fields = ['created_at', 'updated_at', 'deleted_at']
+    
+    def get_status_display(self, obj):
+        return dict(ContractReport.STATUS_CHOICES).get(obj.status, obj.status)
+    get_status_display.short_description = 'Estado'
+    
+    def get_performed_by(self, obj):
+        if hasattr(obj, 'performed_by') and obj.performed_by:
+            return obj.performed_by.username
+        return '-'
+    get_performed_by.short_description = 'Realizado por'
+    
+    def is_completed(self, obj):
+        return obj.status == 'COMPLETED'
+    is_completed.boolean = True
+    is_completed.short_description = 'Completado'

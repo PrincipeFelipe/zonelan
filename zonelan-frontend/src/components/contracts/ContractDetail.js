@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { 
     Edit, Delete, Warning, Assignment, CalendarToday, 
-    CloudUpload, Description, Add, Visibility, FileDownload
+    CloudUpload, Description, Add, Visibility, FileDownload, Print as PrintIcon
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import format from 'date-fns/format';
@@ -14,11 +14,45 @@ import parseISO from 'date-fns/parseISO';
 import differenceInDays from 'date-fns/differenceInDays';
 import es from 'date-fns/locale/es';
 import { useContracts } from '../../hooks/useContracts';
+import axios from '../../utils/axiosConfig';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import MaintenanceForm from './MaintenanceForm';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import DocumentPreview from './DocumentPreview';
+import MaintenancePrintDialog from './MaintenancePrintDialog';
+
+// Función para obtener el texto del tipo de mantenimiento
+const getMaintenanceTypeText = (type) => {
+  const types = {
+    'PREVENTIVE': 'Preventivo',
+    'CORRECTIVE': 'Correctivo',
+    'EMERGENCY': 'Emergencia',
+    'INSPECTION': 'Inspección'
+  };
+  return types[type] || type || 'No especificado';
+};
+
+// Función para obtener el texto del estado
+const getStatusText = (status) => {
+  const statuses = {
+    'PENDING': 'Pendiente',
+    'IN_PROGRESS': 'En progreso',
+    'COMPLETED': 'Completado',
+    'CANCELLED': 'Cancelado'
+  };
+  return statuses[status] || status || 'No especificado';
+};
+
+// Función para obtener el nombre del técnico
+const getTechnicianName = (technicianId, usersList) => {
+  if (!technicianId || !usersList || !usersList.length) return '';
+  const technician = usersList.find(user => user.id === technicianId);
+  if (!technician) return '';
+  
+  // Priorizar el nombre completo, luego el nombre de usuario
+  return technician.name || technician.username || '';
+};
 
 const ContractDetail = () => {
     const navigate = useNavigate();
@@ -43,6 +77,9 @@ const ContractDetail = () => {
     const [openMaintenanceDialog, setOpenMaintenanceDialog] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState(null);
+    const [users, setUsers] = useState([]);
+    const [printDialogOpen, setPrintDialogOpen] = useState(false);
+    const [selectedMaintenance, setSelectedMaintenance] = useState(null);
     
     useEffect(() => {
         loadContractData();
@@ -67,6 +104,15 @@ const ContractDetail = () => {
             // Cargar reportes
             const reportsData = await fetchContractReports(id);
             setReports(reportsData || []);
+            
+            // Cargar lista de usuarios para resolución de nombres
+            try {
+                const response = await axios.get('/users/');
+                setUsers(response.data);
+            } catch (userError) {
+                console.error('Error al cargar usuarios:', userError);
+                // No mostramos toast para esto ya que no es crítico
+            }
             
         } catch (error) {
             console.error('Error al cargar los datos del contrato:', error);
@@ -135,6 +181,27 @@ const ContractDetail = () => {
     const handlePreviewDocument = (document) => {
         setSelectedDocument(document);
         setPreviewOpen(true);
+    };
+
+    const handlePrintMaintenance = (record) => {
+        // Preparar los datos del mantenimiento para la impresión
+        const maintenanceData = {
+            ...record,
+            contract_title: contract?.title || 'Sin título',
+            contract_number: contract?.contract_number || 'No especificado',
+            customer_name: contract?.customer_name || 'No especificado',
+            maintenance_type_display: record.maintenance_type_display || record.maintenance_type || 'No especificado',
+            status_display: record.status_display || record.status || 'No especificado',
+            technician_name: record.technician_name || record.performed_by_name || 'No especificado'
+        };
+        
+        // Almacenar los datos y abrir el diálogo
+        setSelectedMaintenance(maintenanceData);
+        setPrintDialogOpen(true);
+    };
+    
+    const handleClosePrintDialog = () => {
+        setPrintDialogOpen(false);
     };
     
     if (loading) {
@@ -379,6 +446,16 @@ const ContractDetail = () => {
                                                     </>
                                                 }
                                             />
+                                            <ListItemSecondaryAction>
+                                                <IconButton 
+                                                    edge="end" 
+                                                    color="secondary"
+                                                    onClick={() => handlePrintMaintenance(record)}
+                                                    title="Imprimir justificante"
+                                                >
+                                                    <PrintIcon />
+                                                </IconButton>
+                                            </ListItemSecondaryAction>
                                         </ListItem>
                                     ))}
                                 </List>
@@ -570,6 +647,13 @@ const ContractDetail = () => {
                 open={previewOpen}
                 onClose={() => setPreviewOpen(false)}
                 document={selectedDocument}
+            />
+
+            {/* Diálogo de impresión */}
+            <MaintenancePrintDialog 
+                open={printDialogOpen}
+                onClose={handleClosePrintDialog}
+                maintenance={selectedMaintenance}
             />
         </Box>
     );

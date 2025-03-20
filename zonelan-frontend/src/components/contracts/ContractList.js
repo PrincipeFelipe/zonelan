@@ -176,14 +176,23 @@ const ContractList = () => {
   
   // Función para verificar si un contrato tiene mantenimiento pendiente
   const isMaintenancePending = (contract) => {
-    if (!contract.requires_maintenance || !contract.next_maintenance_date) {
+    // Primero verificar si el contrato requiere mantenimiento
+    if (!contract.requires_maintenance) {
       return false;
     }
     
+    // Si no tiene fecha de próximo mantenimiento pero requiere mantenimiento, considerarlo pendiente
+    if (!contract.next_maintenance_date) {
+      return true;
+    }
+    
+    // Verificar si la fecha de próximo mantenimiento ya pasó o es hoy
     const today = new Date();
+    // La fecha viene en formato ISO (YYYY-MM-DD)
     const nextMaintenance = parseISO(contract.next_maintenance_date);
     const daysToMaintenance = differenceInDays(nextMaintenance, today);
     
+    // Si daysToMaintenance es menor o igual a 0, entonces el mantenimiento está pendiente
     return daysToMaintenance <= 0;
   };
   
@@ -330,10 +339,27 @@ const ContractList = () => {
                   <TableCell>{formatDate(contract.start_date)}</TableCell>
                   <TableCell>{formatDate(contract.end_date)}</TableCell>
                   <TableCell>
-                    {isMaintenancePending(contract) ? (
-                      <Chip label="Pendiente" color="warning" size="small" />
+                    {contract.requires_maintenance ? (
+                      isMaintenancePending(contract) ? (
+                        <Chip 
+                          label="Pendiente" 
+                          color="warning" 
+                          size="small" 
+                        />
+                      ) : (
+                        <Chip 
+                          label="Programado" 
+                          color="info" 
+                          size="small" 
+                        />
+                      )
                     ) : (
-                      <Chip label="No requerido" variant="outlined" size="small" />
+                      <Chip 
+                        label="No requiere" 
+                        color="default" 
+                        variant="outlined" 
+                        size="small" 
+                      />
                     )}
                   </TableCell>
                   <TableCell align="center">

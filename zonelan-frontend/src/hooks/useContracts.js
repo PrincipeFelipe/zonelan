@@ -15,7 +15,7 @@ export const useContracts = () => {
                 }
             });
             
-            const response = await axios.get(`/api/contracts/contracts/?${queryParams}`);
+            const response = await axios.get(`/contracts/contracts/?${queryParams}`);
             return response.data;
         } catch (error) {
             console.error('Error al obtener contratos:', error);
@@ -43,7 +43,7 @@ export const useContracts = () => {
     const createContract = async (contractData) => {
         setLoading(true);
         try {
-            const response = await axios.post('/api/contracts/contracts/', contractData);
+            const response = await axios.post('/contracts/contracts/', contractData);
             toast.success('Contrato creado exitosamente');
             return response.data;
         } catch (error) {
@@ -65,7 +65,7 @@ export const useContracts = () => {
     const updateContract = async (id, contractData) => {
         setLoading(true);
         try {
-            const response = await axios.put(`/api/contracts/contracts/${id}/`, contractData);
+            const response = await axios.put(`/contracts/contracts/${id}/`, contractData);
             toast.success('Contrato actualizado exitosamente');
             return response.data;
         } catch (error) {
@@ -87,7 +87,7 @@ export const useContracts = () => {
     const deleteContract = async (id) => {
         setLoading(true);
         try {
-            await axios.delete(`/api/contracts/contracts/${id}/`);
+            await axios.delete(`/contracts/contracts/${id}/`);
             toast.success('Contrato eliminado correctamente');
             return true;
         } catch (error) {
@@ -160,7 +160,7 @@ export const useContracts = () => {
     const completeContractMaintenance = async (contractId, maintenanceData) => {
         setLoading(true);
         try {
-            const response = await axios.post(`/api/contracts/contracts/${contractId}/complete_maintenance/`, maintenanceData);
+            const response = await axios.post(`/contracts/contracts/${contractId}/complete_maintenance/`, maintenanceData);
             toast.success('Mantenimiento registrado correctamente');
             return response.data;
         } catch (error) {
@@ -176,7 +176,7 @@ export const useContracts = () => {
         setLoading(true);
         try {
             // Corregir la URL para que coincida con la usada en otras funciones
-            const response = await axios.get(`/api/contracts/documents/?contract=${contractId}`);
+            const response = await axios.get(`/contracts/documents/?contract=${contractId}`);
             console.log('Documentos obtenidos:', response.data); // Para depurar
             return response.data;
         } catch (error) {
@@ -191,7 +191,7 @@ export const useContracts = () => {
     const uploadContractDocument = async (formData) => {
         setLoading(true);
         try {
-            const response = await axios.post('/api/contracts/documents/', formData, {
+            const response = await axios.post('/contracts/documents/', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -210,7 +210,7 @@ export const useContracts = () => {
     const deleteContractDocument = async (documentId) => {
         setLoading(true);
         try {
-            await axios.delete(`/api/contracts/documents/${documentId}/`);
+            await axios.delete(`/contracts/documents/${documentId}/`);
             toast.success('Documento eliminado correctamente');
             return true;
         } catch (error) {
@@ -255,7 +255,7 @@ export const useContracts = () => {
     const fetchContractReport = async (reportId) => {
         setLoading(true);
         try {
-            const response = await axios.get(`/api/contracts/reports/${reportId}/`);
+            const response = await axios.get(`/contracts/reports/${reportId}/`);
             return response.data;
         } catch (error) {
             console.error('Error al obtener reporte:', error);
@@ -269,7 +269,7 @@ export const useContracts = () => {
     const createContractReport = async (reportData) => {
         setLoading(true);
         try {
-            const response = await axios.post('/api/contracts/reports/', reportData);
+            const response = await axios.post('/contracts/reports/', reportData);
             toast.success('Reporte creado exitosamente');
             return response.data;
         } catch (error) {
@@ -284,7 +284,7 @@ export const useContracts = () => {
     const updateContractReport = async (reportId, reportData) => {
         setLoading(true);
         try {
-            const response = await axios.put(`/api/contracts/reports/${reportId}/`, reportData);
+            const response = await axios.put(`/contracts/reports/${reportId}/`, reportData);
             toast.success('Reporte actualizado exitosamente');
             return response.data;
         } catch (error) {
@@ -299,7 +299,7 @@ export const useContracts = () => {
     const deleteContractReport = async (reportId) => {
         setLoading(true);
         try {
-            await axios.delete(`/api/contracts/reports/${reportId}/`);
+            await axios.delete(`/contracts/reports/${reportId}/`);
             toast.success('Reporte eliminado correctamente');
             return true;
         } catch (error) {

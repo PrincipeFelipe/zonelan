@@ -16,6 +16,18 @@ from .serializers import (
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+import os
+import mimetypes
+from django.http import FileResponse, HttpResponse
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.conf import settings
+import requests
+from urllib.parse import urlparse
+from django.shortcuts import redirect
+from wsgiref.util import FileWrapper
+import io
+import traceback
+import json
 
 class ContractViewSet(viewsets.ModelViewSet):
     """API para gestionar contratos."""
@@ -185,17 +197,22 @@ class ContractDocumentViewSet(viewsets.ModelViewSet):
 
 
 class ContractReportViewSet(viewsets.ModelViewSet):
-    """API para gestionar reportes de trabajo de contratos."""
     queryset = ContractReport.objects.filter(is_deleted=False)
     serializer_class = ContractReportSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['contract', 'status', 'performed_by']
-    search_fields = ['title', 'description']
+    search_fields = ['description']
     ordering_fields = ['date', 'created_at']
+    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Importante para manejar archivos
     
     def get_queryset(self):
         queryset = super().get_queryset()
+        
+        # Determinar si se deben incluir reportes eliminados
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() in ['true', '1']
+        if include_deleted:
+            queryset = ContractReport.objects.all()
         
         # Filtrar por contrato si se proporciona el parámetro
         contract_id = self.request.query_params.get('contract')
@@ -207,6 +224,92 @@ class ContractReportViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(performed_by=self.request.user)
     
+    def create(self, request, *args, **kwargs):
+        try:
+            # Log para depuración
+            print("========== INICIO DE DEPURACIÓN CREATE ==========")
+            print(f"Datos recibidos: {request.data}")
+            
+            # Intentar convertir los datos JSON a diccionarios para mejor visualización
+            try:
+                if 'technicians' in request.data:
+                    technicians = json.loads(request.data.get('technicians', '[]'))
+                    print(f"Technicians: {technicians}")
+                
+                if 'materials_used' in request.data:
+                    materials = json.loads(request.data.get('materials_used', '[]'))
+                    print(f"Materials: {materials}")
+                
+                if 'existing_images' in request.data:
+                    images = json.loads(request.data.get('existing_images', '[]'))
+                    print(f"Images: {images}")
+            except Exception as e:
+                print(f"Error al parsear JSON: {str(e)}")
+            
+            # Continuar con la creación normal
+            return super().create(request, *args, **kwargs)
+        
+        except Exception as e:
+            # Mostrar stacktrace completo
+            error_trace = traceback.format_exc()
+            print(f"Error en create: {str(e)}")
+            print(error_trace)
+            
+            # Devolver una respuesta más informativa
+            return Response(
+                {
+                    "error": str(e),
+                    "detail": error_trace,
+                    "message": "Error al crear el reporte de contrato"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            print("========== FIN DE DEPURACIÓN CREATE ==========")
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            # Log para depuración
+            print("========== INICIO DE DEPURACIÓN UPDATE ==========")
+            print(f"Datos recibidos: {request.data}")
+            
+            # Intentar convertir los datos JSON a diccionarios para mejor visualización
+            try:
+                if 'technicians' in request.data:
+                    technicians = json.loads(request.data.get('technicians', '[]'))
+                    print(f"Technicians: {technicians}")
+                
+                if 'materials_used' in request.data:
+                    materials = json.loads(request.data.get('materials_used', '[]'))
+                    print(f"Materials: {materials}")
+                
+                if 'existing_images' in request.data:
+                    images = json.loads(request.data.get('existing_images', '[]'))
+                    print(f"Images: {images}")
+            except Exception as e:
+                print(f"Error al parsear JSON: {str(e)}")
+            
+            # Continuar con la actualización normal
+            return super().update(request, *args, **kwargs)
+        
+        except Exception as e:
+            # Mostrar stacktrace completo
+            error_trace = traceback.format_exc()
+            print(f"Error en update: {str(e)}")
+            print(error_trace)
+            
+            # Devolver una respuesta más informativa
+            return Response(
+                {
+                    "error": str(e),
+                    "detail": error_trace,
+                    "message": "Error al actualizar el reporte de contrato"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            print("========== FIN DE DEPURACIÓN UPDATE ==========")
+            
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         """Marca un reporte como eliminado en lugar de borrarlo realmente."""
@@ -249,3 +352,83 @@ def expiring_soon(request):
     
     serializer = ContractSerializer(contracts, many=True)
     return Response(serializer.data)
+
+@xframe_options_exempt
+def document_proxy(request):
+    """
+    Vista que sirve como proxy para mostrar documentos en iframes,
+    sin la restricción de X-Frame-Options.
+    """
+    url = request.GET.get('url')
+    if not url:
+        return HttpResponse('URL no proporcionada', status=400)
+    
+    try:
+        # Si es una URL completa
+        if url.startswith(('http://', 'https://')):
+            # Para URLs externas, hacer proxy de la petición
+            response = requests.get(url, stream=True)
+            
+            # Crear una respuesta con el contenido
+            content_type = response.headers.get('Content-Type')
+            if not content_type:
+                # Intentar adivinar el tipo MIME
+                content_type = mimetypes.guess_type(url)[0] or 'application/octet-stream'
+            
+            # Crear respuesta de Django
+            django_response = HttpResponse(
+                content=response.content,
+                status=response.status_code,
+                content_type=content_type
+            )
+            
+            # Añadir cabeceras que permiten el iframe
+            django_response['X-Frame-Options'] = 'SAMEORIGIN'
+            
+            # Eliminar cabeceras que fuerzan descarga
+            if 'Content-Disposition' in django_response:
+                del django_response['Content-Disposition']
+                
+            return django_response
+            
+        # Si es una ruta relativa (comienza con /media/ o /mediafiles/)
+        elif url.startswith(('/media/', '/mediafiles/')):
+            # Obtener la ruta relativa del archivo
+            if url.startswith('/media/'):
+                rel_path = url[7:]  # Quitar '/media/'
+            else:
+                rel_path = url[11:]  # Quitar '/mediafiles/'
+            
+            # Construir ruta absoluta
+            file_path = os.path.join(settings.MEDIA_ROOT, rel_path)
+            
+            # Verificar que el archivo existe
+            if not os.path.exists(file_path):
+                return HttpResponse('Archivo no encontrado', status=404)
+            
+            # Adivinar el tipo MIME
+            content_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+            
+            # Crear respuesta con el archivo
+            response = FileResponse(
+                open(file_path, 'rb'),
+                content_type=content_type
+            )
+            
+            # Configurar cabeceras
+            response['X-Frame-Options'] = 'SAMEORIGIN'
+            
+            # Si es un PDF, asegurarse de que se muestre en línea
+            if content_type == 'application/pdf':
+                response['Content-Disposition'] = 'inline; filename="{}"'.format(
+                    os.path.basename(file_path)
+                )
+                
+            return response
+        
+        # Para cualquier otro caso, devolver error
+        else:
+            return HttpResponse('URL no válida', status=400)
+            
+    except Exception as e:
+        return HttpResponse(f'Error al procesar el documento: {str(e)}', status=500)

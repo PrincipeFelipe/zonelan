@@ -8,9 +8,10 @@ import {
     TableHead, TableRow, Paper, Chip, IconButton, CircularProgress,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon } from '@mui/icons-material';
 import { formatDate } from '../../utils/formatters';
 import MaintenanceForm from './MaintenanceForm';
+import MaintenancePrintDialog from './MaintenancePrintDialog';
 
 const MaintenanceList = () => {
     const { id } = useParams();
@@ -23,6 +24,8 @@ const MaintenanceList = () => {
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
     const [users, setUsers] = useState([]);
+    const [printDialogOpen, setPrintDialogOpen] = useState(false);
+    const [selectedMaintenance, setSelectedMaintenance] = useState(null);
     
     const { 
         fetchContract, 
@@ -150,6 +153,31 @@ const MaintenanceList = () => {
         return technicianId;
     };
 
+    // Modificar la función de impresión
+    const handlePrintMaintenance = (record) => {
+        // Preparar los datos para la impresión
+        const maintenanceData = {
+            ...record,
+            contract_title: contract?.title || 'Sin título',
+            contract_number: contract?.contract_number || 'No especificado',
+            customer_name: contract?.customer_name || 'No especificado',
+            maintenance_type_display: record.maintenance_type_display || getMaintenanceTypeText(record.maintenance_type) || 'No especificado',
+            status_display: record.status_display || getStatusText(record.status) || 'No especificado',
+            technician_name: record.technician_name || 
+                             (record.technician ? getTechnicianName(record.technician, users) : '') || 
+                             record.performed_by_name || 'No especificado'
+        };
+        
+        // Actualizar estados para mostrar el diálogo
+        setSelectedMaintenance(maintenanceData);
+        setPrintDialogOpen(true);
+    };
+
+    // Función para cerrar el diálogo
+    const handleClosePrintDialog = () => {
+        setPrintDialogOpen(false);
+    };
+
     // Mostrar loading cuando se están cargando los datos
     if (loading) {
         return (
@@ -229,6 +257,7 @@ const MaintenanceList = () => {
                                             size="small" 
                                             color="primary"
                                             onClick={() => handleEditClick(record)}
+                                            title="Editar"
                                         >
                                             <EditIcon fontSize="small" />
                                         </IconButton>
@@ -236,8 +265,17 @@ const MaintenanceList = () => {
                                             size="small" 
                                             color="error"
                                             onClick={() => handleDeleteClick(record.id)}
+                                            title="Eliminar"
                                         >
                                             <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton 
+                                            size="small" 
+                                            color="secondary"
+                                            onClick={() => handlePrintMaintenance(record)}
+                                            title="Imprimir justificante"
+                                        >
+                                            <PrintIcon fontSize="small" />
                                         </IconButton>
                                     </TableCell>
                                 </TableRow>
@@ -278,6 +316,13 @@ const MaintenanceList = () => {
                     contractId={id}
                 />
             )}
+
+            {/* Diálogo de impresión */}
+            <MaintenancePrintDialog 
+                open={printDialogOpen}
+                onClose={handleClosePrintDialog}
+                maintenance={selectedMaintenance}
+            />
         </Box>
     );
 };

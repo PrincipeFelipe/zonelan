@@ -265,56 +265,125 @@ class ContractDocument(models.Model):
 
 
 class ContractReport(models.Model):
-    """
-    Reportes de trabajo asociados a los contratos, similar a los reportes de incidencias.
-    """
     STATUS_CHOICES = [
         ('DRAFT', 'Borrador'),
         ('COMPLETED', 'Completado'),
+        ('DELETED', 'Eliminado')
     ]
     
-    contract = models.ForeignKey(
-        Contract,
-        on_delete=models.CASCADE,
-        related_name='reports',
-        verbose_name='Contrato'
-    )
-    title = models.CharField(max_length=255, verbose_name='Título')
-    description = models.TextField(verbose_name='Descripción del trabajo')
-    date = models.DateField(verbose_name='Fecha')
-    hours_worked = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        verbose_name='Horas trabajadas',
-        null=True,
-        blank=True
-    )
-    performed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='contract_reports',
-        verbose_name='Realizado por'
-    )
+    contract = models.ForeignKey('Contract', on_delete=models.CASCADE, related_name='reports')
+    date = models.DateField()
+    description = models.TextField()
+    hours_worked = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='DRAFT',
-        verbose_name='Estado'
+        default='DRAFT'
     )
-    is_completed = models.BooleanField(default=False, verbose_name='Completado')
-    observations = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+    performed_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contract_reports'
+    )
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    # Manejo igual que en los reportes de incidencias
-    is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')
-    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de eliminación')
+    # Propiedades para obtener imágenes por tipo
+    @property
+    def before_images(self):
+        return self.images.filter(image_type='BEFORE')
+    
+    @property
+    def after_images(self):
+        return self.images.filter(image_type='AFTER')
 
     class Meta:
         verbose_name = 'Reporte de contrato'
-        verbose_name_plural = 'Reportes de contrato'
+        verbose_name_plural = 'Reportes de contratos'
         ordering = ['-date']
 
     def __str__(self):
-        return f"Reporte {self.title} - {self.contract.title}"
+        return f"Reporte {self.id} - {self.contract.title} ({self.date})"
+
+
+class ContractReportTechnician(models.Model):
+    contract_report = models.ForeignKey(
+        ContractReport,
+        on_delete=models.CASCADE,
+        related_name='technicians', 
+        verbose_name='Reporte de contrato'
+    )
+    technician = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        verbose_name='Técnico'
+    )
+
+    class Meta:
+        verbose_name = 'Técnico asignado a reporte de contrato'
+        verbose_name_plural = 'Técnicos asignados a reportes de contrato'
+        unique_together = ['contract_report', 'technician']
+
+    def __str__(self):
+        return f"{self.technician.username} - Reporte {self.contract_report.id}"
+
+class ContractReportMaterial(models.Model):
+    contract_report = models.ForeignKey(
+        ContractReport,
+        on_delete=models.CASCADE,
+        related_name='materials_used',
+        verbose_name='Reporte de contrato'
+    )
+    material = models.ForeignKey(
+        'materials.Material',
+        on_delete=models.PROTECT,
+        verbose_name='Material'
+    )
+    quantity = models.IntegerField(verbose_name='Cantidad')
+    
+    class Meta:
+        verbose_name = 'Material usado en reporte de contrato'
+        verbose_name_plural = 'Materiales usados en reportes de contrato'
+        unique_together = ['contract_report', 'material']
+
+    def __str__(self):
+        return f"{self.material.name} ({self.quantity}) - Reporte {self.contract_report.id}"
+
+class ContractReportImage(models.Model):
+    IMAGE_TYPE_CHOICES = [
+        ('BEFORE', 'Antes'),
+        ('AFTER', 'Después')
+    ]
+    
+    contract_report = models.ForeignKey(
+        ContractReport,
+        on_delete=models.CASCADE,
+        related_name='images',
+        verbose_name='Reporte de contrato'
+    )
+    image = models.ImageField(
+        upload_to='contract_report_images/%Y/%m/%d/',
+        verbose_name='Imagen'
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Descripción'
+    )
+    image_type = models.CharField(
+        max_length=6,
+        choices=IMAGE_TYPE_CHOICES,
+        verbose_name='Tipo de imagen'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Imagen de reporte de contrato'
+        verbose_name_plural = 'Imágenes de reportes de contrato'
+
+    def __str__(self):
+        return f"Imagen {self.id} - {self.get_image_type_display()} - Reporte {self.contract_report.id}"
