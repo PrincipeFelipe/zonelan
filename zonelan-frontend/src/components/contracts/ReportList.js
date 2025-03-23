@@ -15,6 +15,7 @@ import es from 'date-fns/locale/es';
 import { useContracts } from '../../hooks/useContracts';
 import { Toaster, toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
+import axios from '../../utils/axiosConfig';  // Usa tu instancia configurada, no axios directo
 
 const ReportList = () => {
     const { id } = useParams();
@@ -25,7 +26,7 @@ const ReportList = () => {
         loadingContract, 
         fetchContract,
         fetchContractReports,
-        deleteContractReport 
+        deleteContractReport  // Asegúrate de que esta función esté aquí
     } = useContracts();
     
     const [reports, setReports] = useState([]);
@@ -50,22 +51,75 @@ const ReportList = () => {
     
     const handleDeleteReport = async (reportId) => {
         try {
-            const result = await Swal.fire({
-                title: '¿Está seguro?',
-                text: "Esta acción no se puede revertir",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            });
+            // Primero obtener los detalles del reporte para verificar si tiene materiales
+            const reportResponse = await axios.get(`/contracts/reports/${reportId}/`);
+            const report = reportResponse.data;
             
-            if (result.isConfirmed) {
-                await deleteContractReport(reportId);
-                toast.success('Reporte eliminado correctamente');
-                await fetchContractReports({ contract: id });
+            // Comprobar si el reporte tiene materiales usados
+            const hasMaterials = report.materials_used && report.materials_used.length > 0;
+            
+            let returnMaterials = false;
+            
+            if (hasMaterials) {
+                // Si hay materiales, preguntar qué hacer con ellos
+                const materialNames = report.materials_used.map(m => `${m.material_name} (${m.quantity})`).join(", ");
+                
+                const result = await Swal.fire({
+                    title: '¿Qué hacemos con los materiales?',
+                    html: `Este reporte tiene los siguientes materiales utilizados:<br><br>` +
+                          `<strong>${materialNames}</strong><br><br>` +
+                          `¿Qué deseas hacer con estos materiales?`,
+                    icon: 'question',
+                    showDenyButton: true,
+                    confirmButtonText: 'Devolver al stock',
+                    denyButtonText: 'Mantener como utilizados',
+                    confirmButtonColor: '#28a745',
+                    denyButtonColor: '#dc3545',
+                    showCancelButton: true,
+                    cancelButtonText: 'Cancelar eliminación'
+                });
+                
+                if (result.isDismissed) {
+                    // El usuario canceló la operación
+                    return;
+                }
+                
+                // Si el usuario confirma, devolver los materiales al stock
+                returnMaterials = result.isConfirmed;
+            } else {
+                // Si no hay materiales, solo confirmar la eliminación
+                const confirmResult = await Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: "Esta acción no se puede revertir",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                });
+                
+                if (!confirmResult.isConfirmed) {
+                    return;
+                }
             }
+
+            // Proceder con la eliminación, usando el parámetro returnMaterials
+            await deleteContractReport(reportId, returnMaterials);
+            
+            // Mensaje según la acción realizada
+            if (hasMaterials) {
+                if (returnMaterials) {
+                    toast.success('Reporte eliminado y materiales devueltos al stock');
+                } else {
+                    toast.success('Reporte eliminado manteniendo el uso de materiales');
+                }
+            } else {
+                toast.success('Reporte eliminado correctamente');
+            }
+            
+            // Recargar los datos
+            await loadData();
         } catch (error) {
             console.error('Error al eliminar el reporte:', error);
             toast.error('Error al eliminar el reporte');

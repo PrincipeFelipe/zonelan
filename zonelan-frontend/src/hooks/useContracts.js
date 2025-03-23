@@ -296,10 +296,15 @@ export const useContracts = () => {
         }
     };
     
-    const deleteContractReport = async (reportId) => {
+    const deleteContractReport = async (reportId, returnMaterials = false) => {
         setLoading(true);
         try {
-            await axios.delete(`/contracts/reports/${reportId}/`);
+            // Convertir el parámetro booleano a string para la URL
+            const returnMaterialsParam = returnMaterials ? 'true' : 'false';
+            
+            // Usar el cliente axios configurado correctamente
+            await axios.delete(`/contracts/reports/${reportId}/?return_materials=${returnMaterialsParam}`);
+            
             toast.success('Reporte eliminado correctamente');
             return true;
         } catch (error) {
@@ -400,6 +405,10 @@ export const useContracts = () => {
         
         // Funciones de reportes
         fetchContractReports,
+        fetchContractReport,
+        createContractReport,
+        updateContractReport,
+        deleteContractReport, // Añadir aquí si no estaba
         
         // Estado general
         loading,

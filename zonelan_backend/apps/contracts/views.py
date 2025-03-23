@@ -312,12 +312,35 @@ class ContractReportViewSet(viewsets.ModelViewSet):
             
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
-        """Marca un reporte como eliminado en lugar de borrarlo realmente."""
+        """Marca un reporte como eliminado y opcionalmente devuelve los materiales al stock."""
         instance = self.get_object()
+        return_materials = request.query_params.get('return_materials', 'false').lower() in ['true', '1']
+        
+        # Marcar como eliminado
         instance.is_deleted = True
         instance.deleted_at = timezone.now()
         instance.status = 'DELETED'
         instance.save()
+        
+        # Devolver materiales al stock si se solicita
+        if return_materials:
+            for material_usage in instance.materials_used.all():
+                material = material_usage.material
+                # Incrementar el stock del material
+                material.quantity += material_usage.quantity
+                material.save()
+                
+                # Registrar la devolución en el control de materiales
+                from apps.materials.models import MaterialControl
+                MaterialControl.objects.create(
+                    material=material,
+                    quantity=material_usage.quantity,
+                    operation='ADD',
+                    reason='DEVOLUCION',
+                    user=request.user,
+                    notes=f"Devolución por eliminación de reporte de contrato #{instance.id}"
+                )
+        
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Endpoint para obtener contratos con mantenimiento pendiente
