@@ -19,6 +19,7 @@ import { getMaterialMovementById } from '../../services/storageService';
 import ReportDetailModal from '../reports/ReportDetailModal';
 import TicketDetailModal from '../tickets/TicketDetailModal';
 import { useNavigate } from 'react-router-dom';
+import ContractReportDetailModal from '../contracts/ContractReportDetailModal';
 
 const MaterialControlList = () => {
     const [controls, setControls] = useState([]);
@@ -57,6 +58,10 @@ const MaterialControlList = () => {
     // Añadir estos estados después de las otras declaraciones de estado (alrededor de la línea 50)
     const [openControlDetailDialog, setOpenControlDetailDialog] = useState(false);
     const [selectedControl, setSelectedControl] = useState(null);
+
+    // Añadir estos estados
+    const [openContractReportDialog, setOpenContractReportDialog] = useState(false);
+    const [selectedContractReportId, setSelectedContractReportId] = useState(null);
 
     const navigate = useNavigate();
 
@@ -177,15 +182,21 @@ const MaterialControlList = () => {
     };
 
     // Modificar getReasonLabel para incluir traslados
-    const getReasonLabel = (reason, ticket) => {
+    const getReasonLabel = (reason, ticket, reportId, contractReportId) => {
         switch (reason) {
             case 'COMPRA': return 'Compra';
             case 'VENTA': 
                 return ticket ? `Venta (Ticket)` : 'Venta';
             case 'RETIRADA': return 'Retirada';
-            case 'USO': return 'Uso en reporte';
+            case 'USO': 
+                if (contractReportId) {
+                    return `Uso en reporte contrato #${contractReportId}`;
+                } else if (reportId) {
+                    return `Uso en reporte #${reportId}`;
+                }
+                return 'Uso en reporte';
             case 'DEVOLUCION': return 'Devolución';
-            case 'TRASLADO': return 'Traslado';  // Añadir esta línea
+            case 'TRASLADO': return 'Traslado';
             case 'CUADRE': return 'Cuadre de inventario';
             default: return reason;
         }
@@ -254,6 +265,12 @@ const MaterialControlList = () => {
     const handleViewTicket = (ticketId) => {
         setSelectedTicketId(ticketId);
         setOpenTicketDialog(true);
+    };
+
+    // Añadir la función para manejar la vista del reporte de contrato
+    const handleViewContractReport = (contractReportId) => {
+        setSelectedContractReportId(contractReportId);
+        setOpenContractReportDialog(true);
     };
 
     // Añadir estas funciones después de handleViewTicket o en una ubicación adecuada
@@ -438,7 +455,7 @@ const columns = [
             // Construir referencias según el tipo de referencia disponible
             const references = [];
             
-            // Referencia a reporte - Modificada para abrir modal
+            // Referencia a reporte
             if (params.row.report_id) {
                 references.push(
                     <Link 
@@ -457,7 +474,26 @@ const columns = [
                 );
             }
             
-            // Referencia a ticket - Modificada para abrir modal
+            // Referencia a reporte de contrato
+            if (params.row.contract_report_id) {
+                references.push(
+                    <Link 
+                        component="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleViewContractReport(params.row.contract_report_id);
+                        }}
+                        key="contract_report"
+                        underline="hover"
+                        color="primary"
+                        sx={{ textAlign: 'left', cursor: 'pointer' }}
+                    >
+                        Reporte contrato #{params.row.contract_report_id}
+                    </Link>
+                );
+            }
+            
+            // Referencia a ticket
             if (params.row.ticket_id) {
                 references.push(
                     <Link 
@@ -476,7 +512,7 @@ const columns = [
                 );
             }
             
-            // Referencia a movimiento - MOSTRAR MODAL EN VEZ DE NAVEGAR
+            // Referencia a movimiento
             if (params.row.movement_id && params.row.movement_id > 0) {
                 references.push(
                     <Link 
@@ -493,8 +529,10 @@ const columns = [
                         Movimiento #{params.row.movement_id}
                     </Link>
                 );
-
-                // Retornar SOLO el enlace al movimiento, sin el texto de ubicación
+            }
+            
+            // Si hay referencias específicas, mostrarlas
+            if (references.length > 0) {
                 return (
                     <Box>
                         {references.map((ref, index) => (
@@ -507,39 +545,8 @@ const columns = [
                 );
             }
             
-            // Si hay ticket, tampoco mostrar la referencia de ubicación
-            if (params.row.ticket_id) {
-                return (
-                    <Box>
-                        {references.map((ref, index) => (
-                            <React.Fragment key={index}>
-                                {index > 0 && <Box sx={{ my: 0.5 }} />}
-                                {ref}
-                            </React.Fragment>
-                        ))}
-                    </Box>
-                );
-            }
-            
-            // Referencia de ubicación (solo mostrarla si no hay movement_id ni ticket_id)
-            if (params.row.location_reference && params.row.reason !== 'CUADRE') {
-                references.push(
-                    <Typography variant="body2" key="location">
-                        {params.row.location_reference}
-                    </Typography>
-                );
-            }
-            
-            return (
-                <Box>
-                    {references.map((ref, index) => (
-                        <React.Fragment key={index}>
-                            {index > 0 && <Box sx={{ my: 0.5 }} />}
-                            {ref}
-                        </React.Fragment>
-                    ))}
-                </Box>
-            );
+            // Si no hay ninguna referencia específica, no mostrar nada
+            return null;
         }
     },
     // Puedes añadir esta columna al final del array columns:
@@ -1217,6 +1224,46 @@ const columns = [
                                     )}.
                                 </Alert>
                             )}
+
+                            {/* En el modal de detalles del control, añadir sección para reportes de contrato */}
+                            {selectedControl.contract_report_id && (
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                                        Reporte de contrato asociado
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Link 
+                                            component="button"
+                                            onClick={() => {
+                                                handleCloseControlDetailDialog();
+                                                handleViewContractReport(selectedControl.contract_report_id);
+                                            }}
+                                            color={selectedControl.contract_report_deleted ? "error" : "primary"}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            {selectedControl.contract_report_deleted && <Delete fontSize="small" sx={{ mr: 0.5, color: 'error.main' }} />}
+                                            Ver Reporte Contrato #{selectedControl.contract_report_id}
+                                        </Link>
+                                        {selectedControl.contract_report_deleted && (
+                                            <Chip 
+                                                label="Eliminado" 
+                                                color="error"
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ ml: 1 }}
+                                            />
+                                        )}
+                                    </Box>
+                                    {selectedControl.contract_report_deleted && selectedControl.contract_report_deleted_at && (
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                            Eliminado el {format(new Date(selectedControl.contract_report_deleted_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                                        </Typography>
+                                    )}
+                                </Grid>
+                            )}
                         </Grid>
                     ) : (
                         <Typography>No se pudo cargar la información del control</Typography>
@@ -1226,6 +1273,13 @@ const columns = [
                     <Button onClick={handleCloseControlDetailDialog}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Añadir el modal para reportes de contrato */}
+            <ContractReportDetailModal
+                open={openContractReportDialog}
+                onClose={() => setOpenContractReportDialog(false)}
+                reportId={selectedContractReportId}
+            />
         </Box>
     );
 };

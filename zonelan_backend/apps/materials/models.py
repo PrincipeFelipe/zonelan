@@ -69,6 +69,17 @@ class MaterialControl(models.Model):
         related_name='material_controls',
         verbose_name='Reporte asociado'
     )
+    
+    # Añadir el campo para contract_report
+    contract_report = models.ForeignKey(
+        'contracts.ContractReport',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='material_controls',
+        verbose_name='Reporte de contrato asociado'
+    )
+    
     # Añadir campo para ticket usando string reference
     ticket = models.ForeignKey(
         'tickets.Ticket',

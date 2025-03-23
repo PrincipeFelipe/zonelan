@@ -338,6 +338,7 @@ class ContractReportViewSet(viewsets.ModelViewSet):
                     operation='ADD',
                     reason='DEVOLUCION',
                     user=request.user,
+                    contract_report=instance,  # Referenciar al reporte de contrato
                     notes=f"Devolución por eliminación de reporte de contrato #{instance.id}"
                 )
         

@@ -97,7 +97,6 @@ class ContractReportSerializer(serializers.ModelSerializer):
             if material_data and 'material' in material_data and 'quantity' in material_data:
                 material_id = material_data.get('material')
                 quantity = int(material_data.get('quantity'))
-                location_id = material_data.get('location_id')
                 
                 # Crear el registro de material usado
                 ContractReportMaterial.objects.create(
@@ -106,39 +105,21 @@ class ContractReportSerializer(serializers.ModelSerializer):
                     quantity=quantity
                 )
                 
-                # Verificar si se está usando una ubicación específica
-                if location_id:
-                    try:
-                        from apps.storage.models import MaterialLocation
-                        location = MaterialLocation.objects.get(id=location_id)
-                        
-                        # Verificar que la ubicación corresponde al material
-                        if location.material.id != int(material_id):
-                            raise serializers.ValidationError(f"La ubicación no corresponde al material seleccionado.")
-                        
-                        # Verificar que haya suficiente stock en la ubicación
-                        if location.quantity < quantity:
-                            raise serializers.ValidationError(f"No hay suficiente stock en la ubicación. Disponible: {location.quantity}")
-                        
-                        # Actualizar stock en ubicación
-                        location.quantity -= quantity
-                        location.save()
-                    except MaterialLocation.DoesNotExist:
-                        pass
-                
                 # Actualizar stock total del material
                 material = Material.objects.get(id=material_id)
                 material.quantity -= quantity
                 material.save()
                 
-                # Registrar en el control de materiales
+                # Registrar en el control de materiales con la referencia al reporte de contrato
+                from apps.materials.models import MaterialControl
                 MaterialControl.objects.create(
                     user=request.user,
                     material=material,
                     quantity=quantity,
                     operation='REMOVE',
                     reason='USO',
-                    report=report
+                    contract_report=report,  # Usar contract_report en lugar de report
+                    notes=f"Uso en reporte de contrato #{report.id}"  # Añadir nota descriptiva
                 )
 
         # Procesar nuevas imágenes
