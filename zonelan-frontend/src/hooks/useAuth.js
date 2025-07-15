@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, createContext } from 'react';
 import axios from '../utils/axiosConfig';
+import { toast } from 'react-hot-toast';
 
 const AuthContext = createContext();
 
@@ -13,14 +14,13 @@ export const AuthProvider = ({ children }) => {
             try {
                 const token = localStorage.getItem('token');
                 if (token) {
-                    // Obtener información del usuario desde el token
                     const userData = JSON.parse(localStorage.getItem('user') || '{}');
                     setUser(userData);
                 }
             } catch (error) {
                 console.error('Error al inicializar autenticación', error);
-                // Si hay error, limpiar datos de sesión
                 localStorage.removeItem('token');
+                localStorage.removeItem('refresh');
                 localStorage.removeItem('user');
             } finally {
                 setLoading(false);
@@ -31,39 +31,68 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, []);
 
-    // Función de login
     const login = async (username, password) => {
         try {
             setLoading(true);
             const response = await axios.post('/users/token/', { username, password });
-            const { access, refresh, user } = response.data;
             
-            // Guardar token y datos en localStorage
+            if (!response.data || !response.data.access) {
+                toast.error('Respuesta de autenticación inválida');
+                return false;
+            }
+            
+            const { access, refresh } = response.data;
+            
             localStorage.setItem('token', access);
-            localStorage.setItem('refresh', refresh);
-            localStorage.setItem('user', JSON.stringify(user));
+            if (refresh) localStorage.setItem('refresh', refresh);
             
-            // Actualizar el estado de usuario ANTES de retornar
-            setUser(user);
+            try {
+                const tokenParts = access.split('.');
+                const tokenPayload = JSON.parse(atob(tokenParts[1]));
+                const userId = tokenPayload.user_id;
+                
+                const userResponse = await axios.get(`/users/${userId}/`, {
+                    headers: { 'Authorization': `Bearer ${access}` }
+                });
+                
+                localStorage.setItem('user', JSON.stringify(userResponse.data));
+                setUser(userResponse.data);
+            } catch (userError) {
+                console.error('Error al obtener datos del usuario:', userError);
+                const basicUser = { username };
+                localStorage.setItem('user', JSON.stringify(basicUser));
+                setUser(basicUser);
+            }
+            
             return true;
         } catch (error) {
             console.error('Error en login:', error);
+            toast.error(error.response?.data?.detail || 'Error al iniciar sesión');
             return false;
         } finally {
             setLoading(false);
         }
     };
 
-    // Función de logout
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('refresh');
         localStorage.removeItem('user');
         setUser(null);
+        toast.success('Sesión cerrada correctamente');
+    };
+
+    const value = {
+        user,
+        loading,
+        initialized,
+        login,
+        logout,
+        isAuthenticated: !!user
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, initialized, login, logout }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

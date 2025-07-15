@@ -1,13 +1,14 @@
-import React, { useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material';
-import CssBaseline from '@mui/material/CssBaseline';
+import React from 'react';
+import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
+import { BrowserRouter as Router } from 'react-router-dom';
+import { AuthProvider } from './hooks/useAuth'; // Importar desde hooks/useAuth
 import GlobalToaster from './components/common/GlobalToaster';
-import { AuthProvider } from './hooks/useAuth';
-import { checkCommonRoutes } from './utils/debugApiRoutes';
 import AppRoutes from './routes/AppRoutes';
 import './App.css';
 
-const theme = createTheme({
+// Aplicar tema personalizado
+let theme = createTheme({
     palette: {
         primary: {
             main: '#1976d2',
@@ -16,25 +17,48 @@ const theme = createTheme({
             main: '#dc004e',
         },
     },
+    breakpoints: {
+        values: {
+            xs: 0,
+            sm: 600,
+            md: 960,
+            lg: 1280,
+            xl: 1920,
+        },
+    },
+    components: {
+        MuiButton: {
+            styleOverrides: {
+                root: {
+                    textTransform: 'none',
+                },
+            },
+        },
+        MuiDialog: {
+            styleOverrides: {
+                paper: {
+                    margin: '16px',
+                },
+            },
+        },
+    },
 });
 
-const App = () => {
-    useEffect(() => {
-        // Solo ejecutar en entornos de desarrollo
-        if (process.env.NODE_ENV === 'development') {
-            checkCommonRoutes();
-        }
-    }, []);
+// Hacer las fuentes responsivas automáticamente
+theme = responsiveFontSizes(theme);
 
+function App() {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <AuthProvider>
-                <AppRoutes />
-                <GlobalToaster />
+            <AuthProvider> {/* Envolver la aplicación con AuthProvider */}
+                <Router>
+                    <GlobalToaster />
+                    <AppRoutes />
+                </Router>
             </AuthProvider>
         </ThemeProvider>
     );
-};
+}
 
 export default App;

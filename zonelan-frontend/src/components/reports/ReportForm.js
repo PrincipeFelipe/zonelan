@@ -28,8 +28,10 @@ import { toast } from 'react-hot-toast';
 import axios, { getMediaUrl } from '../../utils/axiosConfig';
 import Swal from 'sweetalert2';
 import LocationSelector from '../materials/LocationSelector';
+import { useAuth } from '../../hooks/useAuth'; // Asegúrate de importar desde la ubicación correcta
 
-const ReportForm = () => {
+const ReportForm = ({ type = 'incident', view = false }) => {
+    const { user } = useAuth(); // Usar el hook useAuth
     const navigate = useNavigate();
     const { id } = useParams();
     const location = useLocation();

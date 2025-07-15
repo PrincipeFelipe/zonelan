@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Paper, Typography, TextField, Button, Grid, 
     CircularProgress, FormControl, InputLabel, MenuItem,
-    Select, Divider, Alert
+    Select, Divider, Alert, useTheme, useMediaQuery
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -32,6 +32,9 @@ const CustomerForm = ({ view = false }) => {
     const isViewing = view && isEditing;
     const pageTitle = isViewing ? 'Detalles del Cliente' : 
                      isEditing ? 'Editar Cliente' : 'Crear Nuevo Cliente';
+
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     useEffect(() => {
         if (id) {
@@ -102,8 +105,8 @@ const CustomerForm = ({ view = false }) => {
     }
 
     return (
-        <Box sx={{ p: 2 }}>
-            <Paper sx={{ p: 3, maxWidth: 1000, mx: 'auto' }}>
+        <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+            <Paper sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto' }}>
                 <Typography variant="h6" gutterBottom>
                     {pageTitle}
                 </Typography>
@@ -115,7 +118,7 @@ const CustomerForm = ({ view = false }) => {
                 )}
 
                 <form onSubmit={handleSubmit}>
-                    <Grid container spacing={3}>
+                    <Grid container spacing={{ xs: 2, md: 3 }}>
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 fullWidth
@@ -125,6 +128,7 @@ const CustomerForm = ({ view = false }) => {
                                 onChange={handleInputChange}
                                 disabled={isViewing}
                                 required
+                                size={isMobile ? "small" : "medium"}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -237,7 +241,16 @@ const CustomerForm = ({ view = false }) => {
                             />
                         </Grid>
                         <Grid item xs={12}>
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+                            <Box sx={{ 
+                                display: 'flex', 
+                                justifyContent: 'flex-end', 
+                                gap: 2,
+                                mt: 2,
+                                flexDirection: isMobile ? 'column' : 'row',
+                                '& .MuiButton-root': {
+                                    width: isMobile ? '100%' : 'auto'
+                                }
+                            }}>
                                 <Button 
                                     variant="outlined" 
                                     onClick={() => navigate('/dashboard/customers')}

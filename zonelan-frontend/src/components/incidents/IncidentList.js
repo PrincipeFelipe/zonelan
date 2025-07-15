@@ -27,7 +27,9 @@ import {
     Grid,
     Card,
     CardContent,
-    Tooltip // Añadir esta importación
+    Tooltip, // Añadir esta importación
+    useTheme, useMediaQuery, // Añadir estas importaciones
+    Stack
 } from '@mui/material';
 import { Edit, Delete, Add, Visibility, Print, Close, KeyboardBackspace } from '@mui/icons-material';
 import { Toaster, toast } from 'react-hot-toast';
@@ -558,213 +560,337 @@ const IncidentList = () => {
         }
     };
 
-    // Actualizar las columnas para mejorar la presentación
-
-const columns = [
-    {
-        field: 'id',
-        headerName: 'ID',
-        width: 70,
-        renderCell: (params) => (
-            <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                <Typography variant="body2" fontWeight="500" color="primary">
-                    #{params.value}
-                </Typography>
-            </Box>
-        ),
-    },
-    { 
-        field: 'title',
-        headerName: 'Título',
-        flex: 1,
-        width: 200,
-        renderCell: (params) => (
-            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
-                <Typography variant="body2" fontWeight="500">
-                    {params.value}
-                </Typography>
-            </Box>
-        ),
-    },
-    {
-        field: 'customer_name',
-        headerName: 'Cliente',
-        width: 300,
-        renderCell: (params) => {
-            const customer = customers.find(c => c.id === params.row.customer);
-            
-            return (
-                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
-                    <Typography variant="body2">
+    // Agregar detección de dispositivos
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+    
+    // Función para determinar qué columnas mostrar según el dispositivo
+    const getVisibleColumns = () => {
+        if (isMobile) {
+            // Solo mostrar columnas esenciales en móvil
+            return ['id', 'title', 'status', 'actions'];
+        } else if (isTablet) {
+            // Mostrar algunas columnas más en tablet
+            return ['id', 'title', 'customer_name', 'status', 'priority', 'actions'];
+        }
+        // Mostrar todas las columnas en desktop
+        return ['id', 'title', 'customer_name', 'status', 'priority', 'created_at', 'actions'];
+    };
+    
+    // Función para ajustar los anchos de columna según el dispositivo
+    const getColumnWidth = (field) => {
+        const widths = {
+            mobile: {
+                id: 60,
+                title: 150,
+                status: 110,
+                actions: 110
+            },
+            tablet: {
+                id: 65,
+                title: 180,
+                customer_name: 140,
+                status: 110,
+                priority: 110,
+                actions: 120
+            },
+            desktop: {
+                id: 70,
+                title: 200,
+                customer_name: 300,
+                status: 120,
+                priority: 120,
+                created_at: 120,
+                actions: 140
+            }
+        };
+        
+        if (isMobile) return widths.mobile[field] || 100;
+        if (isTablet) return widths.tablet[field] || 120;
+        return widths.desktop[field] || 150;
+    };
+    
+    // Modificar las columnas para ser responsive
+    const columns = [
+        {
+            field: 'id',
+            headerName: 'ID',
+            width: getColumnWidth('id'),
+            renderCell: (params) => (
+                <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    height: '100%', 
+                    width: '100%',
+                    minWidth: isMobile ? 30 : 50 
+                }}>
+                    <Typography variant={isMobile ? "caption" : "body2"} fontWeight="500" color="primary">
+                        #{params.value}
+                    </Typography>
+                </Box>
+            ),
+        },
+        { 
+            field: 'title',
+            headerName: 'Título',
+            flex: isMobile ? 0 : 1,
+            width: getColumnWidth('title'),
+            renderCell: (params) => (
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'center', 
+                    height: '100%', 
+                    width: '100%',
+                    // Truncar texto largo en dispositivos móviles
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                }}>
+                    <Typography 
+                        variant={isMobile ? "caption" : "body2"} 
+                        fontWeight="500"
+                        sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            width: '100%'
+                        }}
+                    >
                         {params.value}
                     </Typography>
-                    {customer?.business_name && (
-                        <Typography variant="caption" color="text.secondary">
-                            {customer.business_name}
-                        </Typography>
-                    )}
                 </Box>
-            );
+            ),
         },
-    },
-    {
-        field: 'status',
-        headerName: 'Estado',
-        width: 120,
-        renderCell: (params) => {
-            const statusMap = {
-                'PENDING': { label: 'Pendiente', color: '#ed6c02', border: '#ed6c02' },
-                'IN_PROGRESS': { label: 'En Progreso', color: '#0288d1', border: '#0288d1' },
-                'RESOLVED': { label: 'Resuelta', color: '#2e7d32', border: '#2e7d32' },
-                'CLOSED': { label: 'Cerrada', color: '#616161', border: '#616161' }
-            };
-            
-            const statusConfig = statusMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
-            
-            return (
-                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                    <Chip
-                        size="small"
-                        label={statusConfig.label}
-                        sx={{
-                            color: statusConfig.color,
-                            border: `1px solid ${statusConfig.border}`,
-                            backgroundColor: 'transparent',
-                            fontWeight: 500
-                        }}
-                        variant="outlined"
-                    />
-                </Box>
-            );
-        }
-    },
-    {
-        field: 'priority',
-        headerName: 'Prioridad',
-        width: 120,
-        renderCell: (params) => {
-            const priorityMap = {
-                'LOW': { label: 'Baja', color: '#2e7d32', border: '#2e7d32' },
-                'MEDIUM': { label: 'Media', color: '#0288d1', border: '#0288d1' },
-                'HIGH': { label: 'Alta', color: '#ed6c02', border: '#ed6c02' },
-                'CRITICAL': { label: 'Crítica', color: '#d32f2f', border: '#d32f2f' }
-            };
-            
-            const priorityConfig = priorityMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
-            
-            return (
-                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                    <Chip
-                        size="small"
-                        label={priorityConfig.label}
-                        sx={{
-                            color: priorityConfig.color,
-                            border: `1px solid ${priorityConfig.border}`,
-                            backgroundColor: 'transparent',
-                            fontWeight: 500
-                        }}
-                        variant="outlined"
-                    />
-                </Box>
-            );
-        }
-    },
-    {
-        field: 'created_at',
-        headerName: 'Fecha',
-        width: 120,
-        renderCell: (params) => {
-            if (!params.value) return '-';
-
-            try {
-                const date = new Date(params.value);
-                const now = new Date();
-                const diffTime = Math.abs(now - date);
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                
-                // Determinar si la fecha es reciente (menos de 3 días)
-                const isRecent = diffDays < 3;
+        {
+            field: 'customer_name',
+            headerName: 'Cliente',
+            width: getColumnWidth('customer_name'),
+            renderCell: (params) => {
+                const customer = customers.find(c => c.id === params.row.customer);
                 
                 return (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
-                        <Typography variant="body2">
-                            {format(date, 'dd/MM/yyyy')}
+                    <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        justifyContent: 'center', 
+                        height: '100%', 
+                        width: '100%',
+                        overflow: 'hidden'
+                    }}>
+                        <Typography 
+                            variant={isMobile ? "caption" : "body2"}
+                            sx={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                width: '100%'
+                            }}
+                        >
+                            {params.value}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            {format(date, 'HH:mm')}
-                        </Typography>
+                        {!isMobile && customer?.business_name && (
+                            <Typography 
+                                variant="caption" 
+                                color="text.secondary"
+                                sx={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    width: '100%'
+                                }}
+                            >
+                                {customer.business_name}
+                            </Typography>
+                        )}
                     </Box>
                 );
-            } catch (error) {
+            },
+        },
+        {
+            field: 'status',
+            headerName: 'Estado',
+            width: getColumnWidth('status'),
+            renderCell: (params) => {
+                const statusMap = {
+                    'PENDING': { label: 'Pendiente', color: '#ed6c02', border: '#ed6c02' },
+                    'IN_PROGRESS': { label: isMobile ? 'En Prog.' : 'En Progreso', color: '#0288d1', border: '#0288d1' },
+                    'RESOLVED': { label: 'Resuelta', color: '#2e7d32', border: '#2e7d32' },
+                    'CLOSED': { label: 'Cerrada', color: '#616161', border: '#616161' }
+                };
+                
+                const statusConfig = statusMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
+                
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
-                        <Typography variant="body2">Fecha inválida</Typography>
+                        <Chip
+                            size="small"
+                            label={statusConfig.label}
+                            sx={{
+                                color: statusConfig.color,
+                                border: `1px solid ${statusConfig.border}`,
+                                backgroundColor: 'transparent',
+                                fontWeight: 500,
+                                fontSize: isMobile ? '0.65rem' : '0.75rem',
+                                height: isMobile ? '20px' : '24px'
+                            }}
+                            variant="outlined"
+                        />
                     </Box>
                 );
             }
         },
-    },
-    {
-        field: 'actions',
-        headerName: 'Acciones',
-        width: 140,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-            <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '100%',
-                width: '100%',
-                gap: '4px',
-                '& .MuiIconButton-root': {
-                    padding: '4px',
-                    fontSize: '0.875rem',
+        {
+            field: 'priority',
+            headerName: 'Prioridad',
+            width: getColumnWidth('priority'),
+            renderCell: (params) => {
+                const priorityMap = {
+                    'LOW': { label: 'Baja', color: '#2e7d32', border: '#2e7d32' },
+                    'MEDIUM': { label: 'Media', color: '#0288d1', border: '#0288d1' },
+                    'HIGH': { label: 'Alta', color: '#ed6c02', border: '#ed6c02' },
+                    'CRITICAL': { label: 'Crítica', color: '#d32f2f', border: '#d32f2f' }
+                };
+                
+                const priorityConfig = priorityMap[params.value] || { label: params.value, color: '#757575', border: '#757575' };
+                
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                        <Chip
+                            size="small"
+                            label={priorityConfig.label}
+                            sx={{
+                                color: priorityConfig.color,
+                                border: `1px solid ${priorityConfig.border}`,
+                                backgroundColor: 'transparent',
+                                fontWeight: 500,
+                                fontSize: isMobile ? '0.65rem' : '0.75rem',
+                                height: isMobile ? '20px' : '24px'
+                            }}
+                            variant="outlined"
+                        />
+                    </Box>
+                );
+            }
+        },
+        {
+            field: 'created_at',
+            headerName: 'Fecha',
+            width: getColumnWidth('created_at'),
+            renderCell: (params) => {
+                if (!params.value) return '-';
+
+                try {
+                    const date = new Date(params.value);
+                    return (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', width: '100%' }}>
+                            <Typography variant={isMobile ? "caption" : "body2"}>
+                                {format(date, 'dd/MM/yyyy')}
+                            </Typography>
+                            {!isMobile && (
+                                <Typography variant="caption" color="text.secondary">
+                                    {format(date, 'HH:mm')}
+                                </Typography>
+                            )}
+                        </Box>
+                    );
+                } catch (error) {
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%' }}>
+                            <Typography variant={isMobile ? "caption" : "body2"}>Fecha inválida</Typography>
+                        </Box>
+                    );
                 }
-            }}>
-                <Tooltip title="Editar">
-                    <IconButton 
-                        onClick={() => handleOpenDialog(params.row)} 
-                        size="small"
-                        sx={{ color: 'primary.main' }}
-                    >
-                        <Edit fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Ver detalle">
-                    <IconButton 
-                        onClick={() => handleViewIncidentDetail(params.row)} 
-                        size="small"
-                        sx={{ color: 'info.main' }}
-                    >
-                        <Visibility fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Imprimir">
-                    <IconButton 
-                        onClick={() => handlePrintIncident(params.row)} 
-                        size="small"
-                        sx={{ color: 'text.secondary' }}
-                    >
-                        <Print fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Eliminar">
-                    <IconButton 
-                        onClick={() => handleDeleteIncident(params.row)} 
-                        size="small"
-                        sx={{ color: 'error.main' }}
-                    >
-                        <Delete fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            </Box>
-        ),
-    },
-];
+            },
+        },
+        {
+            field: 'actions',
+            headerName: 'Acciones',
+            width: getColumnWidth('actions'),
+            align: 'center',
+            headerAlign: 'center',
+            sortable: false,
+            filterable: false,
+            renderCell: (params) => (
+                <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100%',
+                    width: '100%',
+                    gap: isMobile ? '2px' : '4px',
+                    '& .MuiIconButton-root': {
+                        padding: isMobile ? '2px' : '4px',
+                        fontSize: isMobile ? '0.7rem' : '0.875rem',
+                    }
+                }}>
+                    {isMobile ? (
+                        // En móvil mostrar menos botones
+                        <>
+                            <Tooltip title="Editar">
+                                <IconButton 
+                                    onClick={() => handleOpenDialog(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'primary.main' }}
+                                >
+                                    <Edit fontSize="inherit" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Ver detalle">
+                                <IconButton 
+                                    onClick={() => handleViewIncidentDetail(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'info.main' }}
+                                >
+                                    <Visibility fontSize="inherit" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    ) : (
+                        // En tablet y desktop mostrar todos los botones
+                        <>
+                            <Tooltip title="Editar">
+                                <IconButton 
+                                    onClick={() => handleOpenDialog(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'primary.main' }}
+                                >
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Ver detalle">
+                                <IconButton 
+                                    onClick={() => handleViewIncidentDetail(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'info.main' }}
+                                >
+                                    <Visibility fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Imprimir">
+                                <IconButton 
+                                    onClick={() => handlePrintIncident(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'text.secondary' }}
+                                >
+                                    <Print fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Eliminar">
+                                <IconButton 
+                                    onClick={() => handleDeleteIncident(params.row)} 
+                                    size="small"
+                                    sx={{ color: 'error.main' }}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
+                </Box>
+            ),
+        },
+    ];
 
     const localeText = {
         // Toolbar
@@ -847,217 +973,307 @@ const columns = [
     return (
         <>
             <Toaster position="top-right" />
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">
+            <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                height: '100%',
+                p: { xs: 1, sm: 2 } // Padding responsive
+            }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    justifyContent: 'space-between', 
+                    alignItems: { xs: 'stretch', sm: 'center' },
+                    mb: 2,
+                    gap: 1
+                }}>
+                    <Typography variant={isMobile ? "h6" : "h5"} sx={{ mb: { xs: 1, sm: 0 } }}>
                         Incidencias
                     </Typography>
                     <Button
                         variant="contained"
                         startIcon={<Add />}
                         onClick={() => handleOpenDialog()}
+                        fullWidth={isMobile}
                     >
-                        Nueva Incidencia
+                        {isMobile ? "Nueva" : "Nueva Incidencia"}
                     </Button>
                 </Box>
 
-                <Paper sx={{ flexGrow: 1, width: '100%' }}>
-                    <Box sx={{ height: 400, width: '100%' }}>
+                <Paper sx={{ 
+                    flexGrow: 1, 
+                    width: '100%', 
+                    overflow: 'hidden',
+                    borderRadius: { xs: 1, sm: 2 }
+                }}>
+                    <Box sx={{ 
+                        height: { xs: 350, sm: 400, md: 450 }, 
+                        width: '100%' 
+                    }}>
                         {loading ? (
                             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                                 <CircularProgress />
                             </Box>
                         ) : (
-                            // Actualizar el DataGrid para asegurar un centrado vertical consistente
-
-<DataGrid
-    rows={incidents}
-    columns={columns}
-    initialState={{
-        pagination: {
-            paginationModel: { pageSize: 10, page: 0 },
-        },
-        sorting: {
-            sortModel: [{ field: 'created_at', sort: 'desc' }],
-        },
-    }}
-    pageSizeOptions={[10, 25, 50]}
-    disableRowSelectionOnClick
-    loading={loading}
-    autoHeight
-    slots={{ toolbar: GridToolbar }}
-    slotProps={{
-        toolbar: {
-            showQuickFilter: true,
-            quickFilterProps: { debounceMs: 500 },
-        },
-    }}
-    getRowId={(row) => row.id}
-    localeText={localeText}
-    sx={{
-        border: '1px solid #E0E0E0',
-        borderRadius: 1,
-        '& .MuiDataGrid-row': {
-            borderBottom: '1px solid #F5F5F5',
-        },
-        '& .MuiDataGrid-columnHeader': {
-            backgroundColor: '#F5F5F5',
-            borderRight: '1px solid #E0E0E0',
-            '&:last-child': {
-                borderRight: 'none',
-            },
-        },
-        '& .MuiDataGrid-cell': {
-            borderRight: '1px solid #F5F5F5',
-            '&:last-child': {
-                borderRight: 'none',
-            },
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center', // Centrado vertical para todas las celdas
-            '& .MuiBox-root': {
-                width: '100%' // Asegurar que todos los contenedores Box ocupen el ancho completo
-            }
-        },
-        '& .MuiDataGrid-columnHeaders': {
-            borderBottom: '2px solid #E0E0E0',
-            fontSize: '0.875rem',
-            fontWeight: 'bold',
-        },
-        '& .MuiDataGrid-toolbarContainer': {
-            borderBottom: '1px solid #E0E0E0',
-            padding: '8px 16px',
-        },
-        '& .MuiDataGrid-footerContainer': {
-            borderTop: '2px solid #E0E0E0',
-        },
-        '& .MuiDataGrid-virtualScroller': {
-            backgroundColor: '#FFFFFF',
-        },
-        '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
-            outline: 'none',
-        },
-    }}
-/>
+                            <DataGrid
+                                rows={incidents}
+                                columns={columns.filter(col => getVisibleColumns().includes(col.field))}
+                                initialState={{
+                                    pagination: {
+                                        paginationModel: { pageSize: isMobile ? 5 : 10, page: 0 },
+                                    },
+                                    sorting: {
+                                        sortModel: [{ field: 'created_at', sort: 'desc' }],
+                                    },
+                                    columns: {
+                                        columnVisibilityModel: Object.fromEntries(
+                                            columns.map(col => [col.field, getVisibleColumns().includes(col.field)])
+                                        ),
+                                    },
+                                }}
+                                pageSizeOptions={isMobile ? [5, 10, 25] : [10, 25, 50]}
+                                disableRowSelectionOnClick
+                                loading={loading}
+                                autoHeight={isMobile} // En móvil, usar autoHeight
+                                slots={{ 
+                                    toolbar: isMobile ? undefined : GridToolbar // No mostrar toolbar en móvil
+                                }}
+                                slotProps={{
+                                    toolbar: {
+                                        showQuickFilter: !isMobile, // Ocultar quickFilter en móvil
+                                        quickFilterProps: { debounceMs: 500 },
+                                    },
+                                }}
+                                getRowId={(row) => row.id}
+                                localeText={localeText}
+                                sx={{
+                                    border: '1px solid #E0E0E0',
+                                    borderRadius: 1,
+                                    '& .MuiDataGrid-row': {
+                                        borderBottom: '1px solid #F5F5F5',
+                                    },
+                                    '& .MuiDataGrid-columnHeader': {
+                                        backgroundColor: '#F5F5F5',
+                                        borderRight: '1px solid #E0E0E0',
+                                        '&:last-child': {
+                                            borderRight: 'none',
+                                        },
+                                        fontSize: isMobile ? '0.75rem' : '0.875rem',
+                                        padding: isMobile ? '0 4px' : '0 8px',
+                                    },
+                                    '& .MuiDataGrid-cell': {
+                                        borderRight: '1px solid #F5F5F5',
+                                        '&:last-child': {
+                                            borderRight: 'none',
+                                        },
+                                        padding: isMobile ? '4px' : '8px 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        '& .MuiBox-root': {
+                                            width: '100%'
+                                        }
+                                    },
+                                    '& .MuiDataGrid-columnHeaders': {
+                                        borderBottom: '2px solid #E0E0E0',
+                                        fontWeight: 'bold',
+                                    },
+                                    '& .MuiDataGrid-toolbarContainer': {
+                                        borderBottom: '1px solid #E0E0E0',
+                                        padding: '8px',
+                                    },
+                                    '& .MuiDataGrid-footerContainer': {
+                                        borderTop: '2px solid #E0E0E0',
+                                        // Reducir tamaño de footer en móvil
+                                        '& .MuiTablePagination-root': {
+                                            margin: 0,
+                                            '& .MuiTablePagination-toolbar': {
+                                                padding: isMobile ? '0 4px' : '0 16px',
+                                                minHeight: isMobile ? '40px' : '52px',
+                                            },
+                                            '& .MuiTablePagination-displayedRows': {
+                                                fontSize: isMobile ? '0.7rem' : '0.875rem',
+                                            },
+                                            '& .MuiTablePagination-selectLabel': {
+                                                fontSize: isMobile ? '0.7rem' : '0.875rem',
+                                                margin: 0,
+                                            },
+                                        }
+                                    },
+                                    '& .MuiDataGrid-virtualScroller': {
+                                        backgroundColor: '#FFFFFF',
+                                    },
+                                    '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within, & .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                                        outline: 'none',
+                                    },
+                                    // Hacer más compacto en móvil
+                                    ...(isMobile && {
+                                        '& .MuiDataGrid-main': { overflowX: 'auto' },
+                                        '& .MuiDataGrid-cell': { 
+                                            whiteSpace: 'nowrap',
+                                            minWidth: 'auto',
+                                         },
+                                    })
+                                }}
+                            />
                         )}
                     </Box>
                 </Paper>
             </Box>
 
-            {/* Dialog for Incident Create/Edit */}
-            <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+            {/* Ajustar el diálogo para ser responsive */}
+            <Dialog 
+                open={openDialog} 
+                onClose={handleCloseDialog} 
+                maxWidth="md" 
+                fullWidth
+                fullScreen={isMobile} // Pantalla completa en móviles
+            >
                 <DialogTitle>
-                    {editMode ? 'Editar Incidencia' : 'Crear Nueva Incidencia'}
+                    <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <Typography variant={isMobile ? "h6" : "h5"}>
+                            {editMode ? 'Editar Incidencia' : 'Crear Nueva Incidencia'}
+                        </Typography>
+                        {isMobile && (
+                            <IconButton onClick={handleCloseDialog} edge="end">
+                                <Close />
+                            </IconButton>
+                        )}
+                    </Box>
                 </DialogTitle>
-                <DialogContent>
-                    <TextField
-                        fullWidth
-                        margin="normal"
-                        name="title"
-                        label="Título"
-                        value={newIncident.title}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        fullWidth
-                        margin="normal"
-                        name="description"
-                        label="Descripción"
-                        multiline
-                        rows={4}
-                        value={newIncident.description}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        fullWidth
-                        margin="normal"
-                        select
-                        name="customer"
-                        label="Cliente"
-                        value={newIncident.customer}
-                        onChange={handleInputChange}
-                    >
-                        {customers.map((customer) => (
-                            <MenuItem key={customer.id} value={customer.id}>
-                                {customer.name}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        fullWidth
-                        margin="normal"
-                        select
-                        name="status"
-                        label="Estado"
-                        value={newIncident.status}
-                        onChange={handleInputChange}
-                    >
-                        {STATUS_CHOICES.map((status) => (
-                            <MenuItem key={status.value} value={status.value}>
-                                {status.label}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        fullWidth
-                        margin="normal"
-                        select
-                        name="priority"
-                        label="Prioridad"
-                        value={newIncident.priority}
-                        onChange={handleInputChange}
-                    >
-                        {PRIORITY_CHOICES.map((priority) => (
-                            <MenuItem key={priority.value} value={priority.value}>
-                                {priority.label}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    {editMode && (
+                <DialogContent dividers>
+                    <Box component="form" sx={{ pt: 1 }}>
                         <TextField
                             fullWidth
                             margin="normal"
-                            name="resolution_notes"
-                            label="Notas de resolución"
-                            multiline
-                            rows={4}
-                            value={newIncident.resolution_notes || ''}
+                            name="title"
+                            label="Título"
+                            value={newIncident.title}
                             onChange={handleInputChange}
+                            size={isMobile ? "small" : "medium"}
                         />
-                    )}
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            name="description"
+                            label="Descripción"
+                            multiline
+                            rows={isMobile ? 3 : 4}
+                            value={newIncident.description}
+                            onChange={handleInputChange}
+                            size={isMobile ? "small" : "medium"}
+                        />
+                        <TextField
+                            fullWidth
+                            margin="normal"
+                            select
+                            name="customer"
+                            label="Cliente"
+                            value={newIncident.customer}
+                            onChange={handleInputChange}
+                            size={isMobile ? "small" : "medium"}
+                        >
+                            {customers.map((customer) => (
+                                <MenuItem key={customer.id} value={customer.id}>
+                                    {customer.name}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                        <Box sx={{ 
+                            display: 'flex', 
+                            flexDirection: { xs: 'column', sm: 'row' },
+                            gap: 2
+                        }}>
+                            <TextField
+                                fullWidth
+                                margin="normal"
+                                select
+                                name="status"
+                                label="Estado"
+                                value={newIncident.status}
+                                onChange={handleInputChange}
+                                size={isMobile ? "small" : "medium"}
+                            >
+                                {STATUS_CHOICES.map((status) => (
+                                    <MenuItem key={status.value} value={status.value}>
+                                        {status.label}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                            <TextField
+                                fullWidth
+                                margin="normal"
+                                select
+                                name="priority"
+                                label="Prioridad"
+                                value={newIncident.priority}
+                                onChange={handleInputChange}
+                                size={isMobile ? "small" : "medium"}
+                            >
+                                {PRIORITY_CHOICES.map((priority) => (
+                                    <MenuItem key={priority.value} value={priority.value}>
+                                        {priority.label}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        {editMode && (
+                            <TextField
+                                fullWidth
+                                margin="normal"
+                                name="resolution_notes"
+                                label="Notas de resolución"
+                                multiline
+                                rows={isMobile ? 3 : 4}
+                                value={newIncident.resolution_notes || ''}
+                                onChange={handleInputChange}
+                                size={isMobile ? "small" : "medium"}
+                            />
+                        )}
+                    </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog}>Cancelar</Button>
+                <DialogActions sx={{ 
+                    p: isMobile ? 2 : 1,
+                    flexDirection: isMobile ? 'column' : 'row', 
+                    '& > button': { 
+                        width: isMobile ? '100%' : 'auto',
+                        m: isMobile ? 0.5 : 0
+                    } 
+                }}>
+                    <Button onClick={handleCloseDialog} variant={isMobile ? "outlined" : "text"}>
+                        Cancelar
+                    </Button>
                     <Button onClick={handleSubmit} variant="contained">
                         {editMode ? 'Guardar Cambios' : 'Crear'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* Dialog for Reports */}
-            {selectedIncident && (
-                <ReportDialog
-                    open={openReportDialog}
-                    onClose={() => setOpenReportDialog(false)}
-                    incident={selectedIncident}
-                    onReportSelect={(report) => {
-                        setSelectedReport(report);
-                        setOpenReportDialog(false);
-                    }}
-                />
-            )}
-
-            {/* Diálogo para mostrar el detalle de la incidencia */}
+            {/* Ajustar el diálogo de detalles de incidencia */}
             <Dialog 
                 open={openIncidentDetailDialog} 
                 onClose={() => setOpenIncidentDetailDialog(false)}
                 maxWidth="lg"
                 fullWidth
+                fullScreen={isMobile}
             >
                 <DialogTitle>
                     <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Box display="flex" alignItems="center">
-                            <Typography variant="h6">
+                        <Box display="flex" alignItems="center" sx={{ 
+                            width: '100%', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis'
+                        }}>
+                            <Typography variant={isMobile ? "subtitle1" : "h6"} 
+                                noWrap 
+                                sx={{ 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis' 
+                                }}
+                            >
                                 Incidencia #{selectedIncidentDetail?.id}: {selectedIncidentDetail?.title}
                             </Typography>
                         </Box>
@@ -1066,17 +1282,23 @@ const columns = [
                         </IconButton>
                     </Box>
                 </DialogTitle>
-                <DialogContent dividers>
+                <DialogContent dividers sx={{ p: isMobile ? 1 : 2 }}>
                     {loadingDetail ? (
                         <Box display="flex" justifyContent="center" mt={3} mb={3}>
                             <CircularProgress />
                         </Box>
                     ) : selectedIncidentDetail ? (
-                        <Grid container spacing={2}>
+                        <Grid container spacing={isMobile ? 1 : 2}>
                             <Grid item xs={12} md={7}>
-                                <Paper sx={{ p: 2, height: '100%' }}>
-                                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                                        <Typography variant="h6">Detalles</Typography>
+                                <Paper sx={{ p: isMobile ? 1 : 2, height: '100%' }}>
+                                    <Box display="flex" 
+                                        flexDirection={isMobile ? "column" : "row"}
+                                        alignItems={isMobile ? "flex-start" : "center"} 
+                                        justifyContent="space-between" 
+                                        mb={2}
+                                        gap={1}
+                                    >
+                                        <Typography variant={isMobile ? "subtitle1" : "h6"}>Detalles</Typography>
                                         <Box display="flex" gap={1}>
                                             {renderStatusChip(selectedIncidentDetail.status)}
                                             {renderPriorityChip(selectedIncidentDetail.priority)}
@@ -1084,10 +1306,10 @@ const columns = [
                                     </Box>
                                     <Divider sx={{ mb: 2 }} />
                                     
-                                    <Grid container spacing={2}>
+                                    <Grid container spacing={isMobile ? 1 : 2}>
                                         <Grid item xs={12} sm={6}>
                                             <Typography variant="subtitle2">Cliente</Typography>
-                                            <Typography variant="body1" gutterBottom>
+                                            <Typography variant="body2" gutterBottom>
                                                 {selectedIncidentDetail.customer_name}
                                                 {customers.find(c => c.id === selectedIncidentDetail.customer)?.business_name && (
                                                     <Typography variant="caption" display="block" color="text.secondary">
@@ -1098,19 +1320,19 @@ const columns = [
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
                                             <Typography variant="subtitle2">Fecha de creación</Typography>
-                                            <Typography variant="body1" gutterBottom>
+                                            <Typography variant="body2" gutterBottom>
                                                 {format(new Date(selectedIncidentDetail.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
                                             <Typography variant="subtitle2">Reportada por</Typography>
-                                            <Typography variant="body1" gutterBottom>
+                                            <Typography variant="body2" gutterBottom>
                                                 {selectedIncidentDetail.reported_by_name || 'No especificado'}
                                             </Typography>
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
                                             <Typography variant="subtitle2">Última actualización</Typography>
-                                            <Typography variant="body1" gutterBottom>
+                                            <Typography variant="body2" gutterBottom>
                                                 {format(new Date(selectedIncidentDetail.updated_at), 'dd/MM/yyyy HH:mm', { locale: es })}
                                             </Typography>
                                         </Grid>
@@ -1118,16 +1340,16 @@ const columns = [
                                     
                                     <Box mt={2}>
                                         <Typography variant="subtitle2">Descripción</Typography>
-                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
-                                            <Typography variant="body1">{selectedIncidentDetail.description}</Typography>
+                                        <Paper variant="outlined" sx={{ p: isMobile ? 1 : 2, mt: 1, bgcolor: 'background.default' }}>
+                                            <Typography variant="body2">{selectedIncidentDetail.description}</Typography>
                                         </Paper>
                                     </Box>
                                     
                                     {selectedIncidentDetail.resolution_notes && (
                                         <Box mt={2}>
                                             <Typography variant="subtitle2">Notas de resolución</Typography>
-                                            <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
-                                                <Typography variant="body1">{selectedIncidentDetail.resolution_notes}</Typography>
+                                            <Paper variant="outlined" sx={{ p: isMobile ? 1 : 2, mt: 1, bgcolor: 'background.default' }}>
+                                                <Typography variant="body2">{selectedIncidentDetail.resolution_notes}</Typography>
                                             </Paper>
                                         </Box>
                                     )}
@@ -1135,19 +1357,30 @@ const columns = [
                             </Grid>
                             
                             <Grid item xs={12} md={5}>
-                                <Paper sx={{ p: 2, height: '100%' }}>
+                                <Paper sx={{ p: isMobile ? 1 : 2, height: '100%' }}>
                                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                                        <Typography variant="h6">Partes de trabajo ({incidentReports.length})</Typography>
+                                        <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                            Partes de trabajo ({incidentReports.length})
+                                        </Typography>
                                     </Box>
                                     <Divider sx={{ mb: 2 }} />
                                     
                                     {incidentReports.length > 0 ? (
-                                        <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                                        <Box sx={{ 
+                                            maxHeight: { xs: 300, md: 400 }, 
+                                            overflow: 'auto',
+                                            pr: isMobile ? 0 : 1
+                                        }}>
                                             {incidentReports.map((report) => (
                                                 <Card key={report.id} sx={{ mb: 2 }}>
-                                                    <CardContent>
-                                                        <Box display="flex" justifyContent="space-between" alignItems="center">
-                                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                    <CardContent sx={{ p: isMobile ? 1.5 : 2, "&:last-child": { pb: isMobile ? 1.5 : 2 } }}>
+                                                        <Box display="flex" 
+                                                            justifyContent="space-between" 
+                                                            alignItems="center"
+                                                            flexWrap="wrap"
+                                                            gap={1}
+                                                        >
+                                                            <Typography variant={isMobile ? "body1" : "subtitle1"} fontWeight="bold">
                                                                 Parte #{report.id}
                                                             </Typography>
                                                             <Chip 
@@ -1160,9 +1393,16 @@ const columns = [
                                                             Fecha: {format(new Date(report.date), 'dd/MM/yyyy', { locale: es })}
                                                         </Typography>
                                                         <Typography variant="body2" color="text.secondary">
-                                                            Horas trabajadas: {report.hours_worked || 'No especificado'}
+                                                            Horas: {report.hours_worked || 'No especificado'}
                                                         </Typography>
-                                                        <Typography variant="body2">
+                                                        <Typography variant="body2" sx={{ 
+                                                            mt: 0.5,
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical'
+                                                        }}>
                                                             Técnicos: {report.technicians?.map(t => t.technician_name).join(', ') || 'Sin asignar'}
                                                         </Typography>
                                                         <Box mt={1}>
@@ -1173,6 +1413,7 @@ const columns = [
                                                                     setOpenIncidentDetailDialog(false);
                                                                     navigate(`/dashboard/reports/${report.id}`);
                                                                 }}
+                                                                fullWidth={isMobile}
                                                             >
                                                                 Ver parte
                                                             </Button>
@@ -1182,7 +1423,7 @@ const columns = [
                                             ))}
                                         </Box>
                                     ) : (
-                                        <Typography variant="body1" align="center" py={3}>
+                                        <Typography variant="body2" align="center" py={3}>
                                             No hay partes de trabajo registrados para esta incidencia.
                                         </Typography>
                                     )}
@@ -1195,6 +1436,7 @@ const columns = [
                                                     setOpenIncidentDetailDialog(false);
                                                     createReportFromIncident(selectedIncidentDetail.id);
                                                 }}
+                                                fullWidth={isMobile}
                                             >
                                                 Crear nuevo parte
                                             </Button>
@@ -1215,33 +1457,48 @@ const columns = [
                         </Typography>
                     )}
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ 
+                    p: isMobile ? 2 : 1,
+                    flexDirection: isMobile ? 'column' : 'row', 
+                    '& > button': { 
+                        width: isMobile ? '100%' : 'auto',
+                        m: isMobile ? 0.5 : 0
+                    } 
+                }}>
                     <Button 
-                        variant="outlined" 
+                        variant={isMobile ? "outlined" : "text"}
                         startIcon={<Edit />}
                         onClick={() => {
                             setOpenIncidentDetailDialog(false);
                             handleOpenDialog(selectedIncidentDetail);
                         }}
+                        fullWidth={isMobile}
                     >
                         Editar
                     </Button>
                     <Button 
-                        variant="outlined"
+                        variant={isMobile ? "outlined" : "text"}
                         startIcon={<Print />}
                         onClick={() => {
                             setOpenIncidentDetailDialog(false);
                             handlePrintIncident(selectedIncidentDetail);
                         }}
+                        fullWidth={isMobile}
                     >
                         Imprimir
                     </Button>
-                    <Button onClick={() => setOpenIncidentDetailDialog(false)}>Cerrar</Button>
+                    <Button 
+                        onClick={() => setOpenIncidentDetailDialog(false)} 
+                        variant={isMobile ? "text" : "text"}
+                        fullWidth={isMobile}
+                    >
+                        Cerrar
+                    </Button>
                 </DialogActions>
             </Dialog>
         </>
     );
-    
+
     // Funciones de ayuda para renderizar chips de estado y prioridad
     function renderStatusChip(status) {
         const statusMap = {

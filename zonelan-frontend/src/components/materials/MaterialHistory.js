@@ -16,6 +16,9 @@ import {
     Box,
     IconButton,
     Typography,
+    Grid,
+    useMediaQuery,
+    useTheme
 } from '@mui/material';
 import { 
     ReceiptOutlined, 
@@ -31,6 +34,8 @@ const MaterialHistory = ({ open, onClose, material }) => {
     const [loading, setLoading] = useState(true);
     const [openInvoice, setOpenInvoice] = useState(false);
     const [currentInvoice, setCurrentInvoice] = useState(null);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     useEffect(() => {
         if (material && material.id && open) {
@@ -138,79 +143,185 @@ const MaterialHistory = ({ open, onClose, material }) => {
 
     return (
         <>
-            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-                <DialogTitle>Historial de {material.name}</DialogTitle>
+            <Dialog 
+                open={open} 
+                onClose={onClose} 
+                maxWidth="md" 
+                fullWidth
+                fullScreen={isMobile}
+            >
+                <DialogTitle>
+                    <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        flexWrap: 'wrap'
+                    }}>
+                        <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                            Historial de {material.name}
+                        </Typography>
+                        <IconButton onClick={onClose} size={isMobile ? "small" : "medium"}>
+                            <Close />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
                 <DialogContent>
-                    <TableContainer component={Paper}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Usuario</TableCell>
-                                    <TableCell>Operación</TableCell>
-                                    <TableCell>Motivo</TableCell>
-                                    <TableCell>Cantidad</TableCell>
-                                    <TableCell>Fecha</TableCell>
-                                    <TableCell>Albarán</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {history.map((record) => (
-                                    <TableRow key={record.id}>
-                                        <TableCell>{record.user_name}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={getOperationLabel(record.operation)}
-                                                color={getOperationColor(record.operation)}
-                                                icon={getOperationIcon(record.operation)}
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={getReasonLabel(
-                                                    record.reason, 
-                                                    record.report, 
-                                                    record.report_deleted,
-                                                    record.ticket,
-                                                    record.ticket_canceled,
-                                                    record.ticket_deleted // Añadido este nuevo parámetro
-                                                )}
-                                                color={getReasonColor(record.reason)}
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        </TableCell>
-                                        <TableCell>{record.quantity}</TableCell>
-                                        <TableCell>
-                                            {new Date(record.date).toLocaleString()}
-                                        </TableCell>
-                                        <TableCell>
-                                            {record.invoice_image ? (
-                                                <IconButton 
-                                                    color="primary" 
+                    {isMobile ? (
+                        // Vista de tarjetas para móvil
+                        <Box sx={{ mt: 1 }}>
+                            {history.map((record) => (
+                                <Paper 
+                                    key={record.id} 
+                                    sx={{ p: 2, mb: 2, border: '1px solid #eee' }}
+                                >
+                                    <Grid container spacing={1}>
+                                        <Grid item xs={6}>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Operación
+                                            </Typography>
+                                            <Box sx={{ mt: 0.5 }}>
+                                                <Chip
                                                     size="small"
+                                                    label={getOperationLabel(record.operation)}
+                                                    color={getOperationColor(record.operation)}
+                                                    icon={getOperationIcon(record.operation)}
+                                                    variant="outlined"
+                                                />
+                                            </Box>
+                                        </Grid>
+                                        <Grid item xs={6}>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Motivo
+                                            </Typography>
+                                            <Box sx={{ mt: 0.5 }}>
+                                                <Chip
+                                                    size="small"
+                                                    label={getReasonLabel(
+                                                        record.reason, 
+                                                        record.report_id, 
+                                                        record.report_deleted,
+                                                        record.ticket_id,
+                                                        record.ticket_canceled,
+                                                        record.ticket_deleted,
+                                                        record.contract_report_id,
+                                                        record.contract_report_deleted
+                                                    )}
+                                                    color={getReasonColor(record.reason)}
+                                                    variant="outlined"
+                                                />
+                                            </Box>
+                                        </Grid>
+                                        <Grid item xs={6}>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Cantidad
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                {record.quantity}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={6}>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Fecha
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                {new Date(record.date).toLocaleString()}
+                                            </Typography>
+                                        </Grid>
+                                        {record.invoice_image && (
+                                            <Grid item xs={12} sx={{ mt: 1 }}>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    startIcon={<ReceiptOutlined />}
                                                     onClick={() => handleViewInvoice(record.invoice_image)}
                                                 >
-                                                    <ReceiptOutlined />
-                                                </IconButton>
-                                            ) : (
-                                                '-'
-                                            )}
-                                        </TableCell>
+                                                    Ver albarán
+                                                </Button>
+                                            </Grid>
+                                        )}
+                                    </Grid>
+                                </Paper>
+                            ))}
+                        </Box>
+                    ) : (
+                        // Vista de tabla para tablets y desktop
+                        <TableContainer component={Paper}>
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Usuario</TableCell>
+                                        <TableCell>Operación</TableCell>
+                                        <TableCell>Motivo</TableCell>
+                                        <TableCell>Cantidad</TableCell>
+                                        <TableCell>Fecha</TableCell>
+                                        <TableCell>Albarán</TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                </TableHead>
+                                <TableBody>
+                                    {history.map((record) => (
+                                        <TableRow key={record.id}>
+                                            <TableCell>{record.user_name}</TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={getOperationLabel(record.operation)}
+                                                    color={getOperationColor(record.operation)}
+                                                    icon={getOperationIcon(record.operation)}
+                                                    size="small"
+                                                    variant="outlined"
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    label={getReasonLabel(
+                                                        record.reason, 
+                                                        record.report, 
+                                                        record.report_deleted,
+                                                        record.ticket,
+                                                        record.ticket_canceled,
+                                                        record.ticket_deleted // Añadido este nuevo parámetro
+                                                    )}
+                                                    color={getReasonColor(record.reason)}
+                                                    size="small"
+                                                    variant="outlined"
+                                                />
+                                            </TableCell>
+                                            <TableCell>{record.quantity}</TableCell>
+                                            <TableCell>
+                                                {new Date(record.date).toLocaleString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                {record.invoice_image ? (
+                                                    <IconButton 
+                                                        color="primary" 
+                                                        size="small"
+                                                        onClick={() => handleViewInvoice(record.invoice_image)}
+                                                    >
+                                                        <ReceiptOutlined />
+                                                    </IconButton>
+                                                ) : (
+                                                    '-'
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={onClose}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
 
-            {/* Diálogo para mostrar la imagen del albarán */}
-            <Dialog open={openInvoice} onClose={() => setOpenInvoice(false)} maxWidth="md" fullWidth>
+            {/* Dialog de imagen - hacer fullScreen en móvil */}
+            <Dialog 
+                open={openInvoice} 
+                onClose={() => setOpenInvoice(false)} 
+                maxWidth="md" 
+                fullWidth
+                fullScreen={isMobile}
+            >
                 <DialogTitle>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                         <Typography>Albarán de Compra</Typography>

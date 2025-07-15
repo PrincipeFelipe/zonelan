@@ -367,7 +367,8 @@ const ReportList = () => {
         { 
             field: 'customer_name', 
             headerName: 'Cliente', 
-            width: 180,
+            //width: 180,
+            minWidth: 400,
             renderCell: (params) => (
                 <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
                     {params.value || '-'}

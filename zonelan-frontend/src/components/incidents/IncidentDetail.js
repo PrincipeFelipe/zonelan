@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Box, Typography, Paper, Button, Chip, Grid, Divider, IconButton, 
-    CircularProgress, Card, CardContent 
+    CircularProgress, Card, CardContent, useTheme, useMediaQuery 
 } from '@mui/material';
 import { KeyboardBackspace, Print, Edit } from '@mui/icons-material';
 import { toast, Toaster } from 'react-hot-toast';
@@ -20,6 +20,9 @@ const IncidentDetail = () => {
     const [incident, setIncident] = useState(null);
     const [loading, setLoading] = useState(true);
     const [openReportDialog, setOpenReportDialog] = useState(false);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
     
     // Añadir los valores constantes para poder utilizarlos en la función de impresión
     const STATUS_CHOICES = [
@@ -413,17 +416,49 @@ const IncidentDetail = () => {
     return (
         <>
             <Toaster position="top-right" />
-            <Box p={2}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                    <Box display="flex" alignItems="center">
-                        <IconButton onClick={() => navigate('/dashboard/incidents')} sx={{ mr: 1 }}>
-                            <KeyboardBackspace />
-                        </IconButton>
-                        <Typography variant="h5">
-                            Incidencia #{incident.id}: {incident.title}
+            <Box sx={{ p: { xs: 1, sm: 2 } }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    justifyContent: 'space-between',
+                    alignItems: { xs: 'flex-start', sm: 'center' },
+                    mb: 2,
+                    gap: 1
+                }}>
+                    <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'flex-start', sm: 'center' },
+                        gap: { xs: 0.5, sm: 1 }
+                    }}>
+                        <Typography variant={isMobile ? "h6" : "h5"}>
+                            Incidencia #{id}
                         </Typography>
+                        {incident && (
+                            <Chip 
+                                label={getStatusLabel(incident.status)} 
+                                color={getStatusColor(incident.status)}
+                                size={isMobile ? "small" : "medium"}
+                            />
+                        )}
                     </Box>
-                    <Box>
+                    
+                    <Box sx={{ 
+                        display: 'flex', 
+                        gap: 1, 
+                        flexWrap: 'wrap',
+                        width: { xs: '100%', sm: 'auto' }
+                    }}>
+                        {/* Botones con fullWidth en móvil */}
+                        <Button 
+                            variant="outlined" 
+                            onClick={() => navigate('/dashboard/incidents')}
+                            fullWidth={isMobile}
+                            size={isMobile ? "small" : "medium"}
+                        >
+                            Volver
+                        </Button>
+                        
                         <Button 
                             startIcon={<Edit />}
                             variant="outlined"
@@ -441,8 +476,9 @@ const IncidentDetail = () => {
                         </Button>
                     </Box>
                 </Box>
-
-                <Grid container spacing={2}>
+                
+                {/* Grid container con dirección de columna en móvil */}
+                <Grid container spacing={2} direction={isMobile ? 'column-reverse' : 'row'}>
                     <Grid item xs={12} md={7}>
                         <Paper sx={{ p: 2, height: '100%' }}>
                             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>

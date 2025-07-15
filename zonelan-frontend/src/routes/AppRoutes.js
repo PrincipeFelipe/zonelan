@@ -1,9 +1,8 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../components/auth/Login';
 import Register from '../components/auth/Register';
 import Dashboard from '../components/dashboard/Dashboard';
-import RequireAuth from '../components/auth/RequireAuth';
 import DashboardHome from '../components/dashboard/DashboardHome';
 import IncidentRoutes from './IncidentRoutes';
 import MaterialRoutes from './MaterialRoutes';
@@ -40,94 +39,97 @@ import MaintenanceList from '../components/contracts/MaintenanceList';
 import ReportList from '../components/contracts/ReportList';
 import ReportForm from '../components/contracts/ReportForm';
 
+const isAuthenticated = () => {
+    const user = localStorage.getItem('user');
+    return !!user;
+};
+
+const PrivateRoute = ({ children }) => {
+    return isAuthenticated() ? children : <Navigate to="/login" />;
+};
+
 const AppRoutes = () => {
     return (
-        <Router>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+        <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            {/* Rutas protegidas */}
+            <Route path="/dashboard" element={
+                <PrivateRoute>
+                    <Dashboard />
+                </PrivateRoute>
+            }>
+                {/* Página principal del dashboard */}
+                <Route path="" element={<DashboardHome />} />
                 
-                {/* Rutas protegidas */}
-                <Route path="/dashboard" element={
-                    <RequireAuth>
-                        <Dashboard />
-                    </RequireAuth>
-                }>
-                    {/* Página principal del dashboard */}
-                    <Route path="" element={<DashboardHome />} />
-                    
-                    {/* ELIMINAR ESTA LÍNEA - no está definido StorageRoutes */}
-                    {/* <Route path="/dashboard/storage/*" element={<StorageRoutes />} /> */}
-                    
-                    {/* Rutas anidadas */}
-                    <Route path="incidents/*" element={<IncidentRoutes />} />
-                    <Route path="materials/*" element={<MaterialRoutes />} />
-                    <Route path="reports/*" element={<ReportRoutes />} />
-                    <Route path="tickets/*" element={<TicketRoutes />} />
-                    <Route path="customers/*" element={<CustomerRoutes />} />
-                    <Route path="users/*" element={<UserRoutes />} />
+                {/* Rutas anidadas */}
+                <Route path="incidents/*" element={<IncidentRoutes />} />
+                <Route path="materials/*" element={<MaterialRoutes />} />
+                <Route path="reports/*" element={<ReportRoutes />} />
+                <Route path="tickets/*" element={<TicketRoutes />} />
+                <Route path="customers/*" element={<CustomerRoutes />} />
+                <Route path="users/*" element={<UserRoutes />} />
 
-                    {/* Rutas de almacenamiento */}
-                    <Route path="storage">
-                        <Route index element={<StorageDashboard />} />
-                        <Route path="warehouses">
-                            <Route index element={<WarehouseList />} />
-                            <Route path="new" element={<WarehouseForm />} />
-                            {/* AÑADIR ESTA RUTA para ver detalles del almacén */}
-                            <Route path=":id" element={<WarehouseDetail />} />
-                            <Route path=":warehouseId/edit" element={<WarehouseForm />} />
-                            <Route path=":warehouseId/departments" element={<DepartmentList />} />
-                            <Route path=":warehouseId/departments/new" element={<DepartmentForm />} />
-                        </Route>
-                        <Route path="departments">
-                            <Route index element={<DepartmentList />} />
-                            <Route path=":departmentId/edit" element={<DepartmentForm />} />
-                            <Route path=":departmentId/shelves" element={<ShelfList />} />
-                            <Route path=":departmentId/shelves/new" element={<ShelfForm />} />
-                        </Route>
-                        <Route path="shelves">
-                            <Route index element={<ShelfList />} />
-                            <Route path=":shelfId/edit" element={<ShelfForm />} />
-                            <Route path=":shelfId/trays" element={<TrayList />} />
-                            <Route path=":shelfId/trays/new" element={<TrayForm />} />
-                        </Route>
-                        <Route path="trays">
-                            <Route index element={<TrayList />} />
-                            <Route path=":trayId/edit" element={<TrayForm />} />
-                        </Route>
-                        <Route path="locations">
-                            <Route index element={<MaterialLocationList />} />
-                            <Route path="new" element={<MaterialLocationForm />} />
-                            <Route path=":id" element={<MaterialLocationForm />} />
-                        </Route>
-                        <Route path="movements">
-                            <Route index element={<MaterialMovementList />} />
-                            <Route path="new" element={<MaterialMovementForm />} />
-                            <Route path=":id" element={<MaterialMovementForm />} />
-                        </Route>
+                {/* Rutas de almacenamiento */}
+                <Route path="storage">
+                    <Route index element={<StorageDashboard />} />
+                    <Route path="warehouses">
+                        <Route index element={<WarehouseList />} />
+                        <Route path="new" element={<WarehouseForm />} />
+                        <Route path=":id" element={<WarehouseDetail />} />
+                        <Route path=":warehouseId/edit" element={<WarehouseForm />} />
+                        <Route path=":warehouseId/departments" element={<DepartmentList />} />
+                        <Route path=":warehouseId/departments/new" element={<DepartmentForm />} />
                     </Route>
-
-                    {/* Rutas de contratos */}
-                    <Route path="contracts">
-                        <Route index element={<ContractDashboard />} />
-                        <Route path="list" element={<ContractList />} />
-                        <Route path="new" element={<ContractForm />} />
-                        <Route path=":id" element={<ContractDetail />} />
-                        <Route path=":id/edit" element={<ContractForm />} />
-                        <Route path=":id/documents" element={<DocumentList />} />
-                        <Route path=":id/documents/new" element={<DocumentUpload />} />
-                        <Route path=":id/maintenances" element={<MaintenanceList />} />
-                        <Route path=":id/reports" element={<ReportList />} />
-                        <Route path=":id/reports/new" element={<ReportForm />} />
-                        <Route path=":id/reports/:reportId" element={<ReportForm />} />
+                    <Route path="departments">
+                        <Route index element={<DepartmentList />} />
+                        <Route path=":departmentId/edit" element={<DepartmentForm />} />
+                        <Route path=":departmentId/shelves" element={<ShelfList />} />
+                        <Route path=":departmentId/shelves/new" element={<ShelfForm />} />
+                    </Route>
+                    <Route path="shelves">
+                        <Route index element={<ShelfList />} />
+                        <Route path=":shelfId/edit" element={<ShelfForm />} />
+                        <Route path=":shelfId/trays" element={<TrayList />} />
+                        <Route path=":shelfId/trays/new" element={<TrayForm />} />
+                    </Route>
+                    <Route path="trays">
+                        <Route index element={<TrayList />} />
+                        <Route path=":trayId/edit" element={<TrayForm />} />
+                    </Route>
+                    <Route path="locations">
+                        <Route index element={<MaterialLocationList />} />
+                        <Route path="new" element={<MaterialLocationForm />} />
+                        <Route path=":id" element={<MaterialLocationForm />} />
+                    </Route>
+                    <Route path="movements">
+                        <Route index element={<MaterialMovementList />} />
+                        <Route path="new" element={<MaterialMovementForm />} />
+                        <Route path=":id" element={<MaterialMovementForm />} />
                     </Route>
                 </Route>
-                
-                {/* Redirección por defecto */}
-                <Route path="/" element={<Navigate to="/dashboard" />} />
-                <Route path="*" element={<Navigate to="/dashboard" />} />
-            </Routes>
-        </Router>
+
+                {/* Rutas de contratos */}
+                <Route path="contracts">
+                    <Route index element={<ContractDashboard />} />
+                    <Route path="list" element={<ContractList />} />
+                    <Route path="new" element={<ContractForm />} />
+                    <Route path=":id" element={<ContractDetail />} />
+                    <Route path=":id/edit" element={<ContractForm />} />
+                    <Route path=":id/documents" element={<DocumentList />} />
+                    <Route path=":id/documents/new" element={<DocumentUpload />} />
+                    <Route path=":id/maintenances" element={<MaintenanceList />} />
+                    <Route path=":id/reports" element={<ReportList />} />
+                    <Route path=":id/reports/new" element={<ReportForm />} />
+                    <Route path=":id/reports/:reportId" element={<ReportForm />} />
+                </Route>
+            </Route>
+            
+            {/* Redirección por defecto */}
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="*" element={<Navigate to="/dashboard" />} />
+        </Routes>
     );
 };
 

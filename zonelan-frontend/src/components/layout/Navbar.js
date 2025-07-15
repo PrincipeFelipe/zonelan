@@ -1,30 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    AppBar, 
-    Toolbar, 
-    Typography, 
-    Button, 
-    Box,
-    IconButton,
-    Menu,
-    MenuItem,
-    ListItemIcon,
-    ListItemText,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Badge
+import {
+    AppBar, Toolbar, Typography, IconButton, Box, Menu, MenuItem, 
+    ListItemIcon, ListItemText, Button, Badge, Drawer, List, ListItem, 
+    ListItemButton, Divider, useTheme, useMediaQuery, Dialog, DialogTitle, DialogContent, TextField, DialogActions
 } from '@mui/material';
-import { 
-    AccountCircle, 
-    Logout, 
-    Person, 
-    Lock,
-    Notifications,
-    ReceiptLong,
-    Assignment
+import {
+    AccountCircle, Notifications, Menu as MenuIcon, Person,
+    Logout, Dashboard, Assignment, Inventory, ReceiptLong, People, Lock
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -33,10 +15,14 @@ import authService from '../../services/authService';
 import incidentService from '../../services/incidentService';
 
 const Navbar = () => {
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [incidentsCount, setIncidentsCount] = useState(0);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const navigate = useNavigate();
     const location = useLocation();
     const user = authService.getCurrentUser();
-    const [anchorEl, setAnchorEl] = useState(null);
     const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
     const [openProfileDialog, setOpenProfileDialog] = useState(false);
     const [passwords, setPasswords] = useState({
@@ -44,18 +30,23 @@ const Navbar = () => {
         new: '',
         confirm: ''
     });
-    const [incidentsCount, setIncidentsCount] = useState(0);
 
-    const navItems = [
+    const handleDrawerToggle = () => {
+        setMobileOpen(!mobileOpen);
+    };
+
+    const navigationItems = [
+        { label: 'Dashboard', path: '/dashboard', icon: <Dashboard /> },
         { label: 'Usuarios', path: '/dashboard/users', minRole: 'Gestor' },
-        { label: 'Clientes', path: '/dashboard/customers', minRole: 'User' },
-        { label: 'Materiales', path: '/dashboard/materials', minRole: 'User' },
-        { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' },
+        { label: 'Clientes', path: '/dashboard/customers', icon: <People /> },
         { label: 'Almacenamiento', path: '/dashboard/storage', minRole: 'Gestor' },
-        { label: 'Incidencias', path: '/dashboard/incidents', minRole: 'User' },
+        { label: 'Incidencias', path: '/dashboard/incidents', icon: <Assignment /> },
         { label: 'Partes', path: '/dashboard/reports', minRole: 'User' },
-        { label: 'Tickets', path: '/dashboard/tickets', minRole: 'User', icon: <ReceiptLong /> },
+        { label: 'Tickets', path: '/dashboard/tickets', icon: <ReceiptLong /> },
         { label: 'Contratos', path: '/dashboard/contracts', minRole: 'User', icon: <Assignment /> },
+        { label: 'Materiales', path: '/dashboard/materials', icon: <Inventory /> },
+        { label: 'Control de Materiales', path: '/dashboard/materials/control', minRole: 'Gestor' },
+        
     ];
 
     const handleMenu = (event) => {
@@ -152,90 +143,134 @@ const Navbar = () => {
         }
     }, [user]);
 
-    return (
-        <AppBar position="static">
-            <Toolbar>
-                {/* Modificamos esta sección para hacer que el logo/nombre lleve al dashboard */}
-                <Typography 
-                    variant="h6" 
-                    component="div" 
-                    sx={{ 
-                        flexGrow: 0, 
-                        mr: 4,
-                        cursor: 'pointer',
-                        '&:hover': {
-                            opacity: 0.8
-                        }
-                    }}
-                    onClick={() => navigate('/dashboard')}
-                >
+    const drawer = (
+        <Box sx={{ width: 250 }}>
+            <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="h6" noWrap component="div">
                     Zonelan
                 </Typography>
-                <Box sx={{ flexGrow: 1, display: 'flex' }}>
-                    {navItems.map((item) => (
-                        <Button
-                            key={item.path}
-                            color="inherit"
-                            onClick={() => navigate(item.path)}
-                            sx={{
-                                mr: 2,
-                                display: canAccess(item.minRole) ? 'block' : 'none',
-                                backgroundColor: location.pathname.startsWith(item.path) ? 'rgba(255,255,255,0.1)' : 'transparent'
+            </Box>
+            <Divider />
+            <List>
+                {navigationItems.map((item) => (
+                    <ListItem key={item.path} disablePadding>
+                        <ListItemButton 
+                            onClick={() => {
+                                navigate(item.path);
+                                setMobileOpen(false);
                             }}
+                            selected={location.pathname === item.path}
                         >
-                            {item.label}
-                        </Button>
-                    ))}
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {/* Icono de notificaciones con contador */}
-                    <IconButton 
-                        color="inherit" 
-                        onClick={() => navigate('/dashboard/incidents')}
-                        sx={{ mr: 2 }}
-                    >
-                        <Badge badgeContent={incidentsCount} color="error">
-                            <Notifications />
-                        </Badge>
-                    </IconButton>
+                            <ListItemIcon>
+                                {item.icon}
+                            </ListItemIcon>
+                            <ListItemText primary={item.label} />
+                        </ListItemButton>
+                    </ListItem>
+                ))}
+            </List>
+        </Box>
+    );
+
+    return (
+        <>
+            <AppBar position="static">
+                <Toolbar>
+                    {isMobile && (
+                        <IconButton
+                            color="inherit"
+                            edge="start"
+                            onClick={handleDrawerToggle}
+                            sx={{ mr: 2 }}
+                        >
+                            <MenuIcon />
+                        </IconButton>
+                    )}
+                    <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                        Zonelan
+                    </Typography>
                     
-                    {/* Menú de usuario */}
-                    <IconButton
-                        size="large"
-                        onClick={handleMenu}
-                        color="inherit"
-                    >
-                        <AccountCircle />
-                    </IconButton>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={Boolean(anchorEl)}
-                        onClose={handleClose}
-                    >
-                        <MenuItem onClick={handleViewProfile}>
-                            <ListItemIcon>
-                                <Person fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText>Ver Perfil</ListItemText>
-                        </MenuItem>
-                        <MenuItem onClick={() => {
-                            handleClose();
-                            setOpenPasswordDialog(true);
-                        }}>
-                            <ListItemIcon>
-                                <Lock fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText>Cambiar Contraseña</ListItemText>
-                        </MenuItem>
-                        <MenuItem onClick={handleLogout}>
-                            <ListItemIcon>
-                                <Logout fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText>Cerrar Sesión</ListItemText>
-                        </MenuItem>
-                    </Menu>
-                </Box>
-            </Toolbar>
+                    {!isMobile && (
+                        <Box sx={{ display: 'flex', mr: 2 }}>
+                            {navigationItems.map((item) => (
+                                <Button
+                                    key={item.path}
+                                    color="inherit"
+                                    onClick={() => navigate(item.path)}
+                                    sx={{
+                                        mx: 1,
+                                        backgroundColor: location.pathname.startsWith(item.path) ? 'rgba(255,255,255,0.1)' : 'transparent'
+                                    }}
+                                >
+                                    {item.label}
+                                </Button>
+                            ))}
+                        </Box>
+                    )}
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <IconButton 
+                            color="inherit" 
+                            onClick={() => navigate('/dashboard/incidents')}
+                            sx={{ mr: 2 }}
+                        >
+                            <Badge badgeContent={incidentsCount} color="error">
+                                <Notifications />
+                            </Badge>
+                        </IconButton>
+                        
+                        <IconButton
+                            size="large"
+                            onClick={handleMenu}
+                            color="inherit"
+                        >
+                            <AccountCircle />
+                        </IconButton>
+                        <Menu
+                            anchorEl={anchorEl}
+                            open={Boolean(anchorEl)}
+                            onClose={handleClose}
+                        >
+                            <MenuItem onClick={handleViewProfile}>
+                                <ListItemIcon>
+                                    <Person fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText>Ver Perfil</ListItemText>
+                            </MenuItem>
+                            <MenuItem onClick={() => {
+                                handleClose();
+                                setOpenPasswordDialog(true);
+                            }}>
+                                <ListItemIcon>
+                                    <Lock fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText>Cambiar Contraseña</ListItemText>
+                            </MenuItem>
+                            <MenuItem onClick={handleLogout}>
+                                <ListItemIcon>
+                                    <Logout fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText>Cerrar Sesión</ListItemText>
+                            </MenuItem>
+                        </Menu>
+                    </Box>
+                </Toolbar>
+            </AppBar>
+            
+            <Drawer
+                variant="temporary"
+                open={mobileOpen}
+                onClose={handleDrawerToggle}
+                ModalProps={{
+                    keepMounted: true
+                }}
+                sx={{
+                    display: { xs: 'block', md: 'none' },
+                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 250 },
+                }}
+            >
+                {drawer}
+            </Drawer>
 
             {/* Diálogo de Cambio de Contraseña */}
             <Dialog 
@@ -313,7 +348,7 @@ const Navbar = () => {
                     <Button onClick={() => setOpenProfileDialog(false)}>Cerrar</Button>
                 </DialogActions>
             </Dialog>
-        </AppBar>
+        </>
     );
 };
 

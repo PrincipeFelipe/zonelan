@@ -1,22 +1,25 @@
 import React from 'react';
-import { Container, Grid, Paper, Typography } from '@mui/material';
-import Navbar from '../layout/Navbar';
+import { Box, Container } from '@mui/material';
 import { Outlet } from 'react-router-dom';
+import Navbar from '../layout/Navbar';
 
 const Dashboard = () => {
     return (
-        <>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <Navbar />
-            <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-                <Grid container spacing={3}>
-                    <Grid item xs={12}>
-                        <Paper sx={{ p: 2 }}>
-                            <Outlet />
-                        </Paper>
-                    </Grid>
-                </Grid>
-            </Container>
-        </>
+            <Box 
+                component="main" 
+                sx={{ 
+                    flexGrow: 1, 
+                    p: 3, 
+                    mt: 1 
+                }}
+            >
+                <Container maxWidth="xl">
+                    <Outlet />
+                </Container>
+            </Box>
+        </Box>
     );
 };
 

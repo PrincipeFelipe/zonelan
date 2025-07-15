@@ -1,8 +1,9 @@
+import React from 'react';
 import { Toaster } from 'react-hot-toast';
 
 const GlobalToaster = () => {
     return (
-        <Toaster 
+        <Toaster
             position="top-right"
             toastOptions={{
                 duration: 4000,
@@ -11,15 +12,17 @@ const GlobalToaster = () => {
                     color: '#fff',
                 },
                 success: {
+                    duration: 3000,
                     style: {
-                        background: 'white',
-                        color: 'green',
+                        background: '#363636',
+                        color: '#fff',
                     },
                 },
                 error: {
+                    duration: 4000,
                     style: {
-                        background: 'white',
-                        color: 'red',
+                        background: '#363636',
+                        color: '#fff',
                     },
                 },
             }}

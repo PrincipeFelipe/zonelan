@@ -5,9 +5,35 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden; /* Prevenir scroll horizontal */
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Media queries básicas para diferentes dispositivos */
+@media (max-width: 600px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 960px) {
+  .hide-on-tablet {
+    display: none !important;
+  }
+}
+
+@media (min-width: 961px) {
+  .hide-on-desktop {
+    display: none !important;
+  }
+}
+
+/* Clase útil para texto responsivo */
+.responsive-text {
+  font-size: 16px;
+}
+
+@media (max-width: 600px) {
+  .responsive-text {
+    font-size: 14px;
+  }
 }

@@ -11,7 +11,6 @@ const RequireAuth = ({ children }) => {
     }
     
     if (!user) {
-        // Almacenar la ubicación actual para redirigir de vuelta después del inicio de sesión
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
