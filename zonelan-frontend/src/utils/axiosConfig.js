@@ -5,7 +5,11 @@ const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Configuración básica
 const instance = axios.create({
-  baseURL
+  baseURL,
+  timeout: 30000, // 30 segundos de timeout
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
 // Interceptor para gestionar headers de autenticación y rutas API
@@ -40,7 +44,7 @@ instance.interceptors.request.use(config => {
   return config;
 });
 
-// Añadir después de los otros interceptores
+// Interceptor para normalizar parámetros
 instance.interceptors.request.use(config => {
     // Si hay parámetros de consulta, normalizarlos
     if (config.params) {
@@ -95,7 +99,7 @@ export const getMediaUrl = (imageUrl) => {
         return imageUrl;
     }
     
-    // Asegurarse que BASE_URL está definido
+    // Asegurar que baseURL está definido
     const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     
     // Construir la URL completa

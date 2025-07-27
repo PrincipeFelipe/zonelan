@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:10.9
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: db_zonelan
+      MYSQL_USER: zonelan_user
+      MYSQL_PASSWORD: zonelan_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./zonelan_backend
+      dockerfile: ../Dockerfile.backend
+    environment:
+      - DB_NAME=db_zonelan
+      - DB_USER=zonelan_user
+      - DB_PASSWORD=zonelan_password
+      - DB_HOST=db
+      - DB_PORT=3306
+      - SECRET_KEY=your-super-secret-key-here
+      - DEBUG=False
+    volumes:
+      - ./zonelan_backend/mediafiles:/app/mediafiles
+      - ./zonelan_backend/staticfiles:/app/staticfiles
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./zonelan-frontend
+      dockerfile: ../Dockerfile.frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:

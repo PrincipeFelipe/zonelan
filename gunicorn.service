@@ -1,0 +1,15 @@
+[Unit]
+Description=Gunicorn instance to serve Zonelan Backend
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/zonelan/zonelan_backend
+Environment="PATH=/var/www/zonelan/venv/bin"
+ExecStart=/var/www/zonelan/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -12,9 +12,14 @@ urlpatterns = [
     path('reports/', include('apps.reports.urls')),
     path('tickets/', include('apps.tickets.urls')),
     path('storage/', include('apps.storage.urls')),
-    path('contracts/', include('apps.contracts.urls')),  # Asegúrate de que sea 'apps.contracts.urls'
+    path('contracts/', include('apps.contracts.urls')),
 ]
 
-# Añadir esta configuración para servir archivos multimedia en desarrollo
+# Servir archivos multimedia y estáticos
 if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+else:
+    # En producción, nginx servirá estos archivos
+    # pero mantenemos las rutas para desarrollo
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
