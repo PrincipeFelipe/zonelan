@@ -231,6 +231,35 @@ mysqldump -u zonelan_user -p db_zonelan > backup_$(date +%Y%m%d_%H%M%S).sql
 
 ## 🚨 Solución de Problemas
 
+### Error de permisos de logging Django
+```bash
+# 1. Agregar usuario al grupo www-data
+sudo usermod -a -G www-data $USER
+
+# 2. Ajustar permisos del directorio de logs
+sudo chmod 775 /var/log/gunicorn
+sudo chmod 664 /var/log/gunicorn/django_errors.log
+
+# 3. Cerrar sesión SSH y volver a conectar para que los cambios de grupo tengan efecto
+exit
+# Reconectar por SSH
+
+# 4. Verificar que ahora puedes ejecutar comandos Django
+cd /var/www/zonelan/zonelan_backend
+source /var/www/zonelan/venv/bin/activate
+python manage.py check --deploy
+```
+
+### Error frontend no construido
+```bash
+cd /var/www/zonelan/zonelan-frontend
+npm install
+npm run build
+
+# Verificar que se creó el directorio build
+ls -la build/
+```
+
 ### Error 502 Bad Gateway
 ```bash
 sudo systemctl status gunicorn
@@ -260,6 +289,51 @@ sudo systemctl status nginx
 sudo systemctl status gunicorn
 sudo systemctl status cloudflared
 sudo systemctl status mariadb
+```
+
+## 🎯 Pasos Finales de Despliegue en el Servidor
+
+### Ejecutar estos comandos en el servidor:
+
+1. **Actualizar el código desde GitHub:**
+```bash
+cd /var/www/zonelan
+git pull origin main
+```
+
+2. **Construir el frontend actualizado:**
+```bash
+cd /var/www/zonelan/zonelan-frontend
+npm install
+npm run build
+```
+
+3. **Generar y configurar SECRET_KEY segura:**
+```bash
+cd /var/www/zonelan/zonelan_backend
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+# Copiar la clave generada y agregarla al archivo .env
+nano .env
+# Agregar: SECRET_KEY=la-clave-generada-aqui
+```
+
+4. **Ejecutar migraciones y collectstatic:**
+```bash
+source /var/www/zonelan/venv/bin/activate
+python manage.py migrate
+python manage.py collectstatic --noinput
+```
+
+5. **Reiniciar servicios:**
+```bash
+sudo systemctl restart gunicorn
+sudo systemctl restart nginx
+```
+
+6. **Verificar que todo funciona:**
+```bash
+python manage.py check --deploy
+curl -I https://gestor.zonelan.cloud
 ```
 
 ## 🎯 URL de Acceso

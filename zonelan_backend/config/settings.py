@@ -149,8 +149,8 @@ CSRF_TRUSTED_ORIGINS = [
 
 AUTH_USER_MODEL = 'users.User'
 
-# Configuración para iframes
-X_FRAME_OPTIONS = 'SAMEORIGIN'
+# Configuración para iframes - No permitir frames por seguridad
+X_FRAME_OPTIONS = 'DENY'
 
 # Confianza en el proxy para SSL
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -174,12 +174,16 @@ LOGGING = {
         'file': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'django_errors.log'),
+            'filename': '/var/log/gunicorn/django_errors.log',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'ERROR',
             'propagate': True,
         },
